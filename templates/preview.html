@@ -62,7 +62,7 @@
 
     <script>
         document.addEventListener('DOMContentLoaded', function() {
-            // Data from Flask – use tojson directly, no JSON.parse
+            // Data from Flask – using tojson filter to embed safely
             const questions = {{ questions|tojson }};
             const initialSections = {{ sections|tojson }};
             const quizType = "{{ quiz_type }}";
@@ -70,6 +70,13 @@
             console.log('Questions loaded:', questions);
             console.log('Initial sections:', initialSections);
             console.log('Quiz type:', quizType);
+
+            // Safety check – ensure questions is an array
+            if (!Array.isArray(questions)) {
+                console.error('questions is not an array! Received:', questions);
+                alert('Failed to load questions. Please check the console.');
+                return;
+            }
 
             document.getElementById('quizTypeLabel').textContent = 
                 quizType === 'full' ? 'Full Mock' : 'Topic Wise';
