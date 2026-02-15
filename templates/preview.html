@@ -1,162 +1,381 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Preview & Edit Quiz</title>
-
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.css">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
-
-<style>
-body { font-family: Arial; margin:20px; background:#f5f7fa; }
-.question-card { border:1px solid #ccc; padding:15px; margin-bottom:20px; border-radius:8px; background:white; }
-.options-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:10px; }
-.image-preview img { max-width:120px; border-radius:4px; }
-button { cursor:pointer; border:none; border-radius:6px; padding:6px 10px; }
-</style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Preview & Edit Quiz</title>
+    <!-- Cropper.js -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.js"></script>
+    <!-- SortableJS -->
+    <script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; background: #f5f7fa; }
+        .question-card { border: 1px solid #ccc; padding: 15px; margin-bottom: 20px; border-radius: 8px; background: white; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
+        .question-header { display: flex; justify-content: space-between; margin-bottom: 10px; }
+        .question-header h3 { margin: 0; color: #2ec4b6; }
+        .options-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; }
+        .option-item { border: 1px dashed #aaa; padding: 8px; border-radius: 4px; background: #fafafa; }
+        .image-preview { max-width: 150px; max-height: 150px; margin-top: 5px; }
+        .image-preview img { max-width: 100%; max-height: 100%; border-radius: 4px; }
+        .btn-upload-image { margin-top: 5px; background: #3498db; color: white; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer; }
+        .crop-container { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 1000; justify-content: center; align-items: center; }
+        .crop-box { background: white; padding: 20px; border-radius: 8px; max-width: 90%; max-height: 90%; overflow: auto; }
+        .crop-image { max-width: 100%; max-height: 70vh; }
+        #generateBtn { padding: 12px 24px; background: #27ae60; color: white; border: none; font-size: 18px; border-radius: 8px; cursor: pointer; margin-top: 20px; }
+        #addQuestionBtn { padding: 10px 20px; background: #2ec4b6; color: white; border: none; font-size: 16px; border-radius: 8px; cursor: pointer; margin: 10px 0; }
+        #quizName, #time, #marks, #negative, #creator { margin-bottom: 15px; padding: 8px; width: 200px; border: 1px solid #ccc; border-radius: 4px; }
+        .duplicateBtn, .deleteBtn { margin-left: 5px; padding: 4px 8px; border: none; border-radius: 4px; cursor: pointer; }
+        .duplicateBtn { background: #f39c12; color: white; }
+        .deleteBtn { background: #c82d3f; color: white; }
+        label { font-weight: bold; }
+        .section-select { margin-bottom: 10px; }
+    </style>
 </head>
-
 <body>
+    <h1>✏️ Edit Quiz (<span id="quizTypeLabel"></span>)</h1>
 
-<h1>✏️ Edit Quiz</h1>
+    <div style="margin-bottom: 20px; background: white; padding: 15px; border-radius: 8px;">
+        <label>Quiz Name: <input type="text" id="quizName" placeholder="My Quiz" value="My Quiz"></label>
+        <label>Time (minutes): <input type="number" id="time" value="25" min="1"></label>
+        <label>Marks per question: <input type="number" id="marks" value="3" step="0.5" min="0"></label>
+        <label>Negative marking: <input type="number" id="negative" value="1" step="0.25" min="0"></label>
+        <label>Creator: <input type="text" id="creator" placeholder="Your name" value="Anonymous"></label>
+    </div>
 
-<button id="addQuestionBtn">➕ Add Question</button>
-<div id="questionsContainer"></div>
-<button id="generateBtn">Generate Quiz</button>
+    <button id="addQuestionBtn">➕ Add New Question</button>
 
-<div id="cropModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.8);align-items:center;justify-content:center;">
-<div style="background:white;padding:20px;">
-<img id="cropImage" style="max-width:80vw;">
-<br>
-<button id="cropCancel">Cancel</button>
-<button id="cropSave">Crop</button>
-</div>
-</div>
+    <div id="questionsContainer"></div>
 
-<script>
-const questions = JSON.parse('{{ questions|tojson|safe }}');
-let sections = JSON.parse('{{ sections|tojson|safe }}');
-const quizType = "{{ quiz_type }}";
+    <button id="generateBtn">Generate Quiz HTML</button>
 
-let currentCrop = {};
+    <!-- Crop Modal -->
+    <div id="cropModal" class="crop-container">
+        <div class="crop-box">
+            <img id="cropImage" class="crop-image">
+            <div style="margin-top: 10px; text-align: right;">
+                <button id="cropCancel">Cancel</button>
+                <button id="cropSave">Crop & Save</button>
+            </div>
+        </div>
+    </div>
 
-function createBlankQuestion(){
-    return {
-        question:"",
-        option_1:"",option_2:"",option_3:"",option_4:"",option_5:"",
-        answer:"",
-        solution_text:"",
-        question_image:"",
-        option_image_1:"",option_image_2:"",option_image_3:"",option_image_4:"",option_image_5:"",
-        solution_image:"",
-        section: sections[0] || "General"
-    };
-}
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // Data from Flask – use tojson directly, no JSON.parse
+            const questions = {{ questions|tojson }};
+            const initialSections = {{ sections|tojson }};
+            const quizType = "{{ quiz_type }}";
 
-function renderQuestions(){
-const container=document.getElementById('questionsContainer');
-container.innerHTML='';
+            console.log('Questions loaded:', questions);
+            console.log('Initial sections:', initialSections);
+            console.log('Quiz type:', quizType);
 
-questions.forEach((q,idx)=>{
-const card=document.createElement('div');
-card.className='question-card';
-card.innerHTML=`
-<h3>Question ${idx+1}</h3>
-<textarea class="q-text" data-i="${idx}">${q.question||''}</textarea>
-<input type="number" class="q-answer" data-i="${idx}" value="${q.answer||''}" min="1" max="5">
-<button class="deleteBtn" data-i="${idx}">Delete</button>
-`;
-container.appendChild(card);
-});
+            document.getElementById('quizTypeLabel').textContent = 
+                quizType === 'full' ? 'Full Mock' : 'Topic Wise';
 
-document.querySelectorAll('.q-text').forEach(inp=>{
-inp.oninput=e=>{
-questions[e.target.dataset.i].question=e.target.value;
-};
-});
+            // For full mock, we need the list of all sections (may grow as user adds new sections)
+            let sections = quizType === 'full' ? [...initialSections] : [];
 
-document.querySelectorAll('.q-answer').forEach(inp=>{
-inp.oninput=e=>{
-let v=parseInt(e.target.value);
-questions[e.target.dataset.i].answer=(v>=1&&v<=5)?v:"";
-};
-});
+            let currentCrop = { target: null, file: null, field: null, index: null };
 
-document.querySelectorAll('.deleteBtn').forEach(btn=>{
-btn.onclick=e=>{
-if(questions.length===1){alert("Need at least 1 question");return;}
-questions.splice(e.target.dataset.i,1);
-renderQuestions();
-};
-});
-}
+            // Function to create a blank question
+            function createBlankQuestion() {
+                let q = {
+                    question: "",
+                    option_1: "", option_2: "", option_3: "", option_4: "", option_5: "",
+                    answer: "",
+                    solution_text: "",
+                    question_image: "",
+                    option_image_1: "", option_image_2: "", option_image_3: "", option_image_4: "", option_image_5: "",
+                    solution_image: ""
+                };
+                if (quizType === 'full') {
+                    q.section = sections.length > 0 ? sections[0] : "General";
+                }
+                return q;
+            }
 
-function openCropModal(file,index,field){
-if(!file.type.startsWith("image/")){alert("Invalid image");return;}
-const reader=new FileReader();
-reader.onload=e=>{
-document.getElementById('cropImage').src=e.target.result;
-currentCrop={index,field};
-document.getElementById('cropModal').style.display='flex';
-if(window.cropper) window.cropper.destroy();
-window.cropper=new Cropper(cropImage);
-};
-reader.readAsDataURL(file);
-}
+            // Render all questions
+            function renderQuestions() {
+                const container = document.getElementById('questionsContainer');
+                if (!container) {
+                    console.error('questionsContainer not found');
+                    return;
+                }
+                container.innerHTML = '';
 
-cropCancel.onclick=()=>{
-cropModal.style.display='none';
-if(window.cropper) cropper.destroy();
-currentCrop={};
-};
+                // For full mock, update sections list from questions
+                if (quizType === 'full') {
+                    const distinct = new Set();
+                    questions.forEach(q => { if (q.section) distinct.add(q.section); });
+                    sections = Array.from(distinct);
+                    if (sections.length === 0) sections = ["General"];
+                }
 
-cropSave.onclick=async()=>{
-if(!window.cropper) return;
-const canvas=cropper.getCroppedCanvas();
-canvas.toBlob(async blob=>{
-const fd=new FormData();
-fd.append('image',blob,'img.jpg');
-const res=await fetch('/upload_image',{method:'POST',body:fd});
-const data=await res.json();
-if(!data.base64){alert("Upload failed");return;}
-questions[currentCrop.index][currentCrop.field]=data.base64;
-cropModal.style.display='none';
-cropper.destroy();
-currentCrop={};
-});
-};
+                questions.forEach((q, idx) => {
+                    const card = document.createElement('div');
+                    card.className = 'question-card';
+                    card.dataset.index = idx;
 
-document.getElementById('addQuestionBtn').onclick=()=>{
-questions.push(createBlankQuestion());
-renderQuestions();
-};
+                    // Section dropdown HTML (only for full mock)
+                    let sectionHtml = '';
+                    if (quizType === 'full') {
+                        let sectionOptions = '';
+                        sections.forEach(s => {
+                            sectionOptions += `<option value="${s}" ${q.section === s ? 'selected' : ''}>${s}</option>`;
+                        });
+                        sectionOptions += `<option value="__new__">+ Add New Section...</option>`;
+                        sectionHtml = `
+                            <div class="section-select">
+                                <label>Section:</label>
+                                <select class="q-section" data-index="${idx}">
+                                    ${sectionOptions}
+                                </select>
+                            </div>
+                        `;
+                    }
 
-document.getElementById('generateBtn').onclick=async()=>{
-const btn=document.getElementById('generateBtn');
-btn.disabled=true;
-await fetch('/generate',{
-method:'POST',
-headers:{'Content-Type':'application/json'},
-body:JSON.stringify({questions,quiz_type:quizType})
-});
-btn.disabled=false;
-};
+                    card.innerHTML = `
+                        <div class="question-header">
+                            <h3>Question ${idx+1}</h3>
+                            <div>
+                                <button class="duplicateBtn" data-index="${idx}">Duplicate</button>
+                                <button class="deleteBtn" data-index="${idx}">Delete</button>
+                            </div>
+                        </div>
+                        ${sectionHtml}
+                        <div>
+                            <label>Question Text:</label>
+                            <textarea class="q-text" data-index="${idx}" rows="3" style="width:100%">${q.question || ''}</textarea>
+                            <div class="image-preview" id="q-img-${idx}">${q.question_image ? `<img src="${q.question_image}">` : ''}</div>
+                            <button class="btn-upload-image" data-index="${idx}" data-field="question_image">Upload Image</button>
+                        </div>
+                        <div class="options-grid">
+                            ${[1,2,3,4,5].map(i => `
+                                <div class="option-item">
+                                    <label>Option ${i}:</label>
+                                    <input type="text" class="q-opt" data-index="${idx}" data-opt="${i}" value="${q[`option_${i}`] || ''}" style="width:100%">
+                                    <div class="image-preview" id="opt-img-${idx}-${i}">${q[`option_image_${i}`] ? `<img src="${q[`option_image_${i}`]}">` : ''}</div>
+                                    <button class="btn-upload-image" data-index="${idx}" data-field="option_image_${i}">Upload</button>
+                                </div>
+                            `).join('')}
+                        </div>
+                        <div>
+                            <label>Correct Answer (option number 1-5):</label>
+                            <input type="number" class="q-answer" data-index="${idx}" min="1" max="5" value="${q.answer || ''}">
+                        </div>
+                        <div>
+                            <label>Explanation:</label>
+                            <textarea class="q-solution" data-index="${idx}" rows="2" style="width:100%">${q.solution_text || ''}</textarea>
+                            <div class="image-preview" id="sol-img-${idx}">${q.solution_image ? `<img src="${q.solution_image}">` : ''}</div>
+                            <button class="btn-upload-image" data-index="${idx}" data-field="solution_image">Upload</button>
+                        </div>
+                    `;
+                    container.appendChild(card);
+                });
 
-window.addEventListener('DOMContentLoaded',()=>{
-new Sortable(document.getElementById('questionsContainer'),{
-animation:150,
-onEnd:(e)=>{
-const m=questions.splice(e.oldIndex,1)[0];
-questions.splice(e.newIndex,0,m);
-renderQuestions();
-}
-});
-});
+                // Attach event listeners
+                attachEventListeners();
+            }
 
-renderQuestions();
-</script>
+            function attachEventListeners() {
+                // Upload buttons
+                document.querySelectorAll('.btn-upload-image').forEach(btn => {
+                    btn.addEventListener('click', (e) => {
+                        const index = e.target.dataset.index;
+                        const field = e.target.dataset.field;
+                        const fileInput = document.createElement('input');
+                        fileInput.type = 'file';
+                        fileInput.accept = 'image/*';
+                        fileInput.onchange = (e2) => {
+                            const file = e2.target.files[0];
+                            if (file) {
+                                openCropModal(file, index, field);
+                            }
+                        };
+                        fileInput.click();
+                    });
+                });
 
+                // Section change (full mock)
+                if (quizType === 'full') {
+                    document.querySelectorAll('.q-section').forEach(sel => {
+                        sel.addEventListener('change', (e) => {
+                            const idx = e.target.dataset.index;
+                            const newVal = e.target.value;
+                            if (newVal === '__new__') {
+                                const newSection = prompt("Enter new section name:");
+                                if (newSection && newSection.trim() !== '') {
+                                    const trimmed = newSection.trim();
+                                    if (!sections.includes(trimmed)) {
+                                        sections.push(trimmed);
+                                    }
+                                    questions[idx].section = trimmed;
+                                    renderQuestions(); // re-render to update dropdowns
+                                } else {
+                                    // revert to previous value
+                                    e.target.value = questions[idx].section;
+                                }
+                            } else {
+                                questions[idx].section = newVal;
+                            }
+                        });
+                    });
+                }
+
+                // Duplicate
+                document.querySelectorAll('.duplicateBtn').forEach(btn => {
+                    btn.addEventListener('click', (e) => {
+                        const idx = parseInt(e.target.dataset.index);
+                        const newQ = JSON.parse(JSON.stringify(questions[idx]));
+                        questions.splice(idx+1, 0, newQ);
+                        renderQuestions();
+                    });
+                });
+
+                // Delete
+                document.querySelectorAll('.deleteBtn').forEach(btn => {
+                    btn.addEventListener('click', (e) => {
+                        const idx = parseInt(e.target.dataset.index);
+                        questions.splice(idx, 1);
+                        renderQuestions();
+                    });
+                });
+
+                // Real-time updates for inputs
+                document.querySelectorAll('.q-text').forEach(inp => {
+                    inp.addEventListener('input', (e) => {
+                        const idx = e.target.dataset.index;
+                        questions[idx].question = e.target.value;
+                    });
+                });
+                document.querySelectorAll('.q-opt').forEach(inp => {
+                    inp.addEventListener('input', (e) => {
+                        const idx = e.target.dataset.index;
+                        const opt = e.target.dataset.opt;
+                        questions[idx][`option_${opt}`] = e.target.value;
+                    });
+                });
+                document.querySelectorAll('.q-answer').forEach(inp => {
+                    inp.addEventListener('input', (e) => {
+                        const idx = e.target.dataset.index;
+                        questions[idx].answer = e.target.value;
+                    });
+                });
+                document.querySelectorAll('.q-solution').forEach(inp => {
+                    inp.addEventListener('input', (e) => {
+                        const idx = e.target.dataset.index;
+                        questions[idx].solution_text = e.target.value;
+                    });
+                });
+            }
+
+            // Cropper functions
+            function openCropModal(file, qIndex, field) {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    const img = document.getElementById('cropImage');
+                    img.src = e.target.result;
+                    currentCrop = { target: img, file, field, index: qIndex };
+                    const modal = document.getElementById('cropModal');
+                    modal.style.display = 'flex';
+                    if (window.cropper) window.cropper.destroy();
+                    window.cropper = new Cropper(img, {
+                        aspectRatio: NaN,
+                        viewMode: 1,
+                        autoCropArea: 1,
+                    });
+                };
+                reader.readAsDataURL(file);
+            }
+
+            document.getElementById('cropCancel').addEventListener('click', () => {
+                document.getElementById('cropModal').style.display = 'none';
+                if (window.cropper) window.cropper.destroy();
+            });
+
+            document.getElementById('cropSave').addEventListener('click', async () => {
+                if (!window.cropper) return;
+                const canvas = window.cropper.getCroppedCanvas({
+                    maxWidth: 900,
+                    maxHeight: 900,
+                    fillColor: '#fff',
+                    imageSmoothingQuality: 'high',
+                });
+                canvas.toBlob(async (blob) => {
+                    const formData = new FormData();
+                    formData.append('image', blob, 'cropped.jpg');
+                    const res = await fetch('/upload_image', { method: 'POST', body: formData });
+                    const data = await res.json();
+                    if (data.base64) {
+                        const idx = currentCrop.index;
+                        const field = currentCrop.field;
+                        questions[idx][field] = data.base64;
+                        // Update preview
+                        const previewId = field === 'question_image' ? `q-img-${idx}` :
+                                          field.startsWith('option_image') ? `opt-img-${idx}-${field.split('_')[2]}` :
+                                          `sol-img-${idx}`;
+                        const previewDiv = document.getElementById(previewId);
+                        if (previewDiv) {
+                            previewDiv.innerHTML = `<img src="${data.base64}" style="max-width:100px;">`;
+                        }
+                    }
+                    document.getElementById('cropModal').style.display = 'none';
+                    if (window.cropper) window.cropper.destroy();
+                }, 'image/jpeg', 0.6);
+            });
+
+            // Sortable for drag-drop
+            new Sortable(document.getElementById('questionsContainer'), {
+                animation: 150,
+                onEnd: (evt) => {
+                    const movedItem = questions.splice(evt.oldIndex, 1)[0];
+                    questions.splice(evt.newIndex, 0, movedItem);
+                    renderQuestions();
+                }
+            });
+
+            // Add New Question button
+            const addBtn = document.getElementById('addQuestionBtn');
+            if (addBtn) {
+                addBtn.addEventListener('click', () => {
+                    questions.push(createBlankQuestion());
+                    renderQuestions();
+                });
+            } else {
+                console.error('addQuestionBtn not found');
+            }
+
+            // Generate final quiz
+            document.getElementById('generateBtn').addEventListener('click', async () => {
+                const quizData = {
+                    quiz_name: document.getElementById('quizName').value || 'Quiz',
+                    time: parseInt(document.getElementById('time').value) || 25,
+                    marks: parseFloat(document.getElementById('marks').value) || 3,
+                    negative: parseFloat(document.getElementById('negative').value) || 1,
+                    creator: document.getElementById('creator').value || 'Anonymous',
+                    questions: questions,
+                    quiz_type: quizType
+                };
+
+                const res = await fetch('/generate', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(quizData)
+                });
+                const blob = await res.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `${quizData.quiz_name}.html`;
+                a.click();
+                window.URL.revokeObjectURL(url);
+            });
+
+            // Initial render
+            renderQuestions();
+        });
+    </script>
 </body>
 </html>
