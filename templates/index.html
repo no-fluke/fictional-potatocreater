@@ -1,228 +1,127 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Quiz Builder - Upload</title>
-
-<style>
-body {
-    font-family: Arial, sans-serif;
-    max-width: 820px;
-    margin: 20px auto;
-    padding: 15px;
-    background: #f5f7fa;
-}
-
-h1 { color: #2ec4b6; text-align: center; }
-
-.container {
-    border: 2px dashed #2ec4b6;
-    padding: 25px;
-    text-align: center;
-    background: white;
-    border-radius: 10px;
-}
-
-.quiz-type { margin: 15px 0; text-align: left; }
-
-.file-group {
-    margin: 10px 0;
-    padding: 12px;
-    border: 1px solid #ddd;
-    border-radius: 6px;
-    background: #fafafa;
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-}
-
-.file-group input[type="text"] {
-    flex: 1;
-    min-width: 160px;
-    padding: 6px;
-}
-
-.file-group input[type="file"] {
-    flex: 2;
-}
-
-button {
-    cursor: pointer;
-    border: none;
-    border-radius: 6px;
-    padding: 10px 16px;
-    font-size: 15px;
-}
-
-#uploadBtn {
-    background: #2ec4b6;
-    color: white;
-    margin-top: 15px;
-}
-
-#uploadBtn:disabled {
-    opacity: 0.6;
-    cursor: not-allowed;
-}
-
-.remove-btn {
-    background: #c82d3f;
-    color: white;
-    padding: 6px 10px;
-}
-
-#addSectionBtn {
-    margin: 10px 0;
-    background: #3498db;
-    color: white;
-}
-
-#progress {
-    display: none;
-    margin-top: 15px;
-    color: #2ec4b6;
-    font-weight: bold;
-}
-</style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Quiz Builder - Upload</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 800px; margin: 20px auto; padding: 20px; background: #f5f7fa; }
+        .container { border: 2px dashed #2ec4b6; padding: 30px; text-align: center; background: white; border-radius: 10px; }
+        #fileInput { margin: 20px 0; }
+        #uploadBtn { padding: 10px 20px; background: #2ec4b6; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 16px; }
+        #progress { display: none; margin-top: 20px; color: #2ec4b6; }
+        h1 { color: #2ec4b6; }
+        .quiz-type { margin: 20px 0; text-align: left; }
+        .quiz-type label { margin-right: 20px; }
+        .file-group { margin: 10px 0; padding: 10px; border: 1px solid #ddd; border-radius: 5px; background: #f9f9f9; }
+        .file-group input[type="text"] { width: 200px; padding: 5px; margin-right: 10px; }
+        .remove-btn { background: #c82d3f; color: white; border: none; padding: 5px 10px; border-radius: 4px; cursor: pointer; }
+        #addSectionBtn { margin: 10px 0; background: #3498db; color: white; border: none; padding: 8px 12px; border-radius: 4px; cursor: pointer; }
+    </style>
 </head>
-
 <body>
+    <h1>📤 Upload TXT File(s)</h1>
+    <div class="container">
+        <div class="quiz-type">
+            <label><input type="radio" name="quiz_type" value="topic" checked onchange="toggleFullMock()"> Topic Wise (Single File)</label>
+            <label><input type="radio" name="quiz_type" value="full" onchange="toggleFullMock()"> Full Mock (Multiple Sections)</label>
+        </div>
 
-<h1>📤 Upload TXT File(s)</h1>
+        <div id="topic-upload" style="display: block;">
+            <input type="file" id="topicFile" accept=".txt">
+        </div>
 
-<div class="container">
+        <div id="full-upload" style="display: none;">
+            <div id="fileGroups"></div>
+            <button type="button" id="addSectionBtn">➕ Add Section</button>
+        </div>
 
-<div class="quiz-type">
-<label>
-<input type="radio" name="quiz_type" value="topic" checked onchange="toggleMode()"> Topic Wise
-</label>
-<label>
-<input type="radio" name="quiz_type" value="full" onchange="toggleMode()"> Full Mock
-</label>
-</div>
+        <button id="uploadBtn">Upload & Parse</button>
+        <div id="progress">Processing...</div>
+    </div>
 
-<div id="topic-upload">
-<input type="file" id="topicFile" accept=".txt">
-</div>
+    <script>
+        let sectionCount = 0;
 
-<div id="full-upload" style="display:none;">
-<div id="fileGroups"></div>
-<button type="button" id="addSectionBtn">➕ Add Section</button>
-</div>
-
-<button id="uploadBtn">Upload & Parse</button>
-<div id="progress">Processing...</div>
-
-</div>
-
-<script>
-let sectionCounter = 0;
-
-function toggleMode() {
-    const type = document.querySelector('input[name="quiz_type"]:checked').value;
-    document.getElementById('topic-upload').style.display = type === 'topic' ? 'block' : 'none';
-    document.getElementById('full-upload').style.display = type === 'full' ? 'block' : 'none';
-
-    if (type === 'full' && document.querySelectorAll('.file-group').length === 0) {
-        addGroup();
-    }
-}
-
-function addGroup() {
-    const container = document.getElementById('fileGroups');
-    const group = document.createElement('div');
-    group.className = 'file-group';
-    group.dataset.id = sectionCounter;
-
-    group.innerHTML = `
-        <input type="text" placeholder="Section Name" required>
-        <input type="file" accept=".txt" required>
-        <button type="button" class="remove-btn">Remove</button>
-    `;
-
-    group.querySelector('.remove-btn').onclick = () => group.remove();
-    container.appendChild(group);
-    sectionCounter++;
-}
-
-document.getElementById('addSectionBtn').onclick = addGroup;
-
-document.getElementById('uploadBtn').addEventListener('click', async () => {
-    const uploadBtn = document.getElementById('uploadBtn');
-    const progress = document.getElementById('progress');
-    const quizType = document.querySelector('input[name="quiz_type"]:checked').value;
-
-    const formData = new FormData();
-    formData.append('quiz_type', quizType);
-
-    if (quizType === 'topic') {
-        const file = document.getElementById('topicFile').files[0];
-        if (!file || !file.name.endsWith('.txt')) {
-            alert('Please select a valid .txt file');
-            return;
-        }
-        formData.append('file', file);
-    } else {
-        const groups = document.querySelectorAll('.file-group');
-        if (groups.length === 0) {
-            alert('Add at least one section');
-            return;
+        function toggleFullMock() {
+            const type = document.querySelector('input[name="quiz_type"]:checked').value;
+            document.getElementById('topic-upload').style.display = type === 'topic' ? 'block' : 'none';
+            document.getElementById('full-upload').style.display = type === 'full' ? 'block' : 'none';
+            if (type === 'full' && sectionCount === 0) {
+                addFileGroup();
+            }
         }
 
-        const names = new Set();
-        let valid = true;
-        let index = 0;
+        function addFileGroup() {
+            const container = document.getElementById('fileGroups');
+            const group = document.createElement('div');
+            group.className = 'file-group';
+            group.id = `group-${sectionCount}`;
+            group.innerHTML = `
+                <input type="text" placeholder="Section Name (e.g., English)" id="section-${sectionCount}" required>
+                <input type="file" accept=".txt" id="file-${sectionCount}" required>
+                <button type="button" class="remove-btn" onclick="removeFileGroup(${sectionCount})">Remove</button>
+            `;
+            container.appendChild(group);
+            sectionCount++;
+        }
 
-        groups.forEach(group => {
-            const sectionName = group.children[0].value.trim();
-            const file = group.children[1].files[0];
+        function removeFileGroup(id) {
+            const group = document.getElementById(`group-${id}`);
+            if (group) group.remove();
+        }
 
-            if (!sectionName || !file || !file.name.endsWith('.txt')) {
-                valid = false;
-                return;
+        document.getElementById('addSectionBtn').addEventListener('click', addFileGroup);
+
+        document.getElementById('uploadBtn').addEventListener('click', async () => {
+            const quizType = document.querySelector('input[name="quiz_type"]:checked').value;
+            const formData = new FormData();
+            formData.append('quiz_type', quizType);
+
+            if (quizType === 'topic') {
+                const file = document.getElementById('topicFile').files[0];
+                if (!file) { alert('Select a file'); return; }
+                formData.append('file', file);
+            } else {
+                const groups = document.querySelectorAll('.file-group');
+                if (groups.length === 0) { alert('Add at least one section'); return; }
+                let valid = true;
+                groups.forEach((group, idx) => {
+                    const sectionInput = group.querySelector('input[type="text"]');
+                    const fileInput = group.querySelector('input[type="file"]');
+                    if (!sectionInput.value.trim()) {
+                        alert(`Section name missing for group ${idx+1}`);
+                        valid = false;
+                        return;
+                    }
+                    if (!fileInput.files[0]) {
+                        alert(`File missing for group ${idx+1}`);
+                        valid = false;
+                        return;
+                    }
+                    formData.append(`section_${idx}`, sectionInput.value.trim());
+                    formData.append(`file_${idx}`, fileInput.files[0]);
+                });
+                if (!valid) return;
             }
 
-            if (names.has(sectionName.toLowerCase())) {
-                alert('Duplicate section name: ' + sectionName);
-                valid = false;
-                return;
+            document.getElementById('progress').style.display = 'block';
+            try {
+                const res = await fetch('/upload', { method: 'POST', body: formData });
+                const data = await res.json();
+                if (data.error) {
+                    alert('Error: ' + data.error);
+                    document.getElementById('progress').style.display = 'none';
+                } else {
+                    window.location.href = `/preview/${data.quiz_id}`;
+                }
+            } catch (e) {
+                alert('Upload failed');
+                document.getElementById('progress').style.display = 'none';
             }
-
-            names.add(sectionName.toLowerCase());
-            formData.append(`section_${index}`, sectionName);
-            formData.append(`file_${index}`, file);
-            index++;
         });
 
-        if (!valid) {
-            alert('Check section names and files.');
-            return;
-        }
-    }
-
-    uploadBtn.disabled = true;
-    progress.style.display = 'block';
-
-    try {
-        const res = await fetch('/upload', { method: 'POST', body: formData });
-        const data = await res.json();
-
-        if (data.error) {
-            alert(data.error);
-            progress.style.display = 'none';
-            uploadBtn.disabled = false;
-        } else {
-            window.location.href = `/preview/${data.quiz_id}`;
-        }
-
-    } catch {
-        alert('Upload failed');
-        progress.style.display = 'none';
-        uploadBtn.disabled = false;
-    }
-});
-</script>
-
+        // Initialize with one file group if full mock is selected by default? No, topic is default.
+    </script>
 </body>
-  </html>
+</html>
