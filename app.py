@@ -1,4 +1,3 @@
-import os
 import re
 import json
 import base64
@@ -6,35 +5,31 @@ import uuid
 from io import BytesIO
 from PIL import Image
 from flask import Flask, render_template, request, jsonify, Response
-from werkzeug.utils import secure_filename
 
 app = Flask(__name__)
 app.config['MAX_CONTENT_LENGTH'] = 10 * 1024 * 1024  # 10MB
 
-# Runtime storage (NOT app.config)
+# Runtime storage
 TEMP_QUIZ_DATA = {}
 
 # -------------------------------
-# Helper: Parse TXT file
+# TXT PARSER (FOR Q.1 FORMAT)
 # -------------------------------
 def parse_txt_file(content, max_questions=500):
     questions = []
 
-    blocks = re.split(r'\n\s*\n|(?=Q\.\d+|\d+\.)', content.strip())
+    # Split by Q.1 Q.2 ...
+    blocks = re.split(r'(?=Q\.\d+)', content.strip(), flags=re.IGNORECASE)
 
     for block in blocks:
         if len(questions) >= max_questions:
             break
 
-        block = block.strip()
-        if not block:
+        lines = [l.strip() for l in block.split('\n') if l.strip()]
+        if len(lines) < 2:
             continue
 
-        lines = [line.strip() for line in block.split('\n') if line.strip()]
-        if len(lines) < 3:
-            continue
-
-        question = {
+        q = {
             "question": "",
             "option_1": "", "option_2": "", "option_3": "", "option_4": "", "option_5": "",
             "answer": "",
@@ -48,73 +43,38 @@ def parse_txt_file(content, max_questions=500):
             "section": ""
         }
 
-        current_line = 0
+        # QUESTION TEXT
+        q["question"] = re.sub(r'^Q\.\d+\s*', '', lines[0], flags=re.IGNORECASE)
 
-        # Question text
-        if re.match(r'^(?:\d+\.\s*|Q\.\d+\s+)', lines[0]):
-            question_text = re.sub(r'^(?:\d+\.\s*|Q\.\d+\s+)', '', lines[0])
-            question_lines = [question_text]
-            current_line = 1
+        opt_index = 1
+        for line in lines[1:]:
 
-            while current_line < len(lines) and not re.match(
-                r'^[a-e][\)\.]|^\([a-e]\)', lines[current_line], re.IGNORECASE
-            ):
-                question_lines.append(lines[current_line])
-                current_line += 1
+            # OPTIONS like (a) Text
+            opt_match = re.match(r'^\(([a-e])\)\s*(.*)', line, re.IGNORECASE)
+            if opt_match and opt_index <= 5:
+                q[f"option_{opt_index}"] = opt_match.group(2)
+                opt_index += 1
+                continue
 
-            question["question"] = '<br>'.join(question_lines)
-        else:
-            question["question"] = lines[0]
-            current_line = 1
+            # ANSWER like Answer: (b)
+            ans_match = re.search(r'Answer\s*[:\-]?\s*\(([a-e])\)', line, re.IGNORECASE)
+            if ans_match:
+                letter = ans_match.group(1).lower()
+                q["answer"] = str(ord(letter) - 96)  # a->1 b->2
 
-        # Options
-        option_count = 0
-        option_pattern = re.compile(r'^([a-e])[\)\.]|^\(([a-e])\)', re.IGNORECASE)
+            # SOLUTION / EXPLANATION
+            sol_match = re.match(r'(Explanation|Solution|Sol)[:\-]?\s*(.*)', line, re.IGNORECASE)
+            if sol_match:
+                q["solution_text"] += sol_match.group(2) + " "
 
-        while current_line < len(lines) and option_count < 5:
-            if option_pattern.match(lines[current_line]):
-                option_key = f"option_{option_count + 1}"
-                option_text = lines[current_line]
-                current_line += 1
-
-                if current_line < len(lines) and not re.match(
-                    r'^[a-e][\)\.]|^\([a-e]\)|^Correct|^Answer|^ex:|^solution|^sol:',
-                    lines[current_line],
-                    re.IGNORECASE
-                ):
-                    option_text += f"<br>{lines[current_line]}"
-                    current_line += 1
-
-                question[option_key] = option_text
-                option_count += 1
-            else:
-                current_line += 1
-
-        # Answer
-        for line in lines:
-            if re.match(r'^(Correct|Answer)', line, re.IGNORECASE):
-                match = re.search(r'([a-e])', line, re.IGNORECASE)
-                if match:
-                    ans = match.group(1).lower()
-                    answer_map = {'a': '1', 'b': '2', 'c': '3', 'd': '4', 'e': '5'}
-                    question["answer"] = answer_map.get(ans, '1')
-
-        # Solution
-        solution_lines = []
-        for line in lines:
-            if re.match(r'^(ex:|solution:|sol:)', line, re.IGNORECASE):
-                solution_lines.append(re.sub(r'^(ex:|solution:|sol:)\s*', '', line, flags=re.IGNORECASE))
-
-        question["solution_text"] = '<br>'.join(solution_lines)
-
-        if question["question"] and (question["option_1"] or question["option_2"]):
-            questions.append(question)
+        if q["option_1"]:
+            questions.append(q)
 
     return questions
 
 
 # -------------------------------
-# Helper: Image Compression
+# IMAGE PROCESSOR
 # -------------------------------
 def process_image(file_storage, max_size=(700, 700), quality=60):
     try:
@@ -137,12 +97,12 @@ def process_image(file_storage, max_size=(700, 700), quality=60):
         return f"data:image/jpeg;base64,{base64_str}"
 
     except Exception as e:
-        print(f"Image error: {e}")
+        print("Image error:", e)
         return None
 
 
 # -------------------------------
-# Routes
+# ROUTES
 # -------------------------------
 @app.route('/')
 def index():
@@ -154,49 +114,7 @@ def upload():
     quiz_type = request.form.get('quiz_type', 'topic')
 
     try:
-        if quiz_type == 'full':
-            files = []
-            sections = []
-
-            for key in request.files:
-                if key.startswith("file_"):
-                    idx = key.split("_")[1]
-                    file = request.files[key]
-
-                    if file.filename == '' or not file.filename.endswith('.txt'):
-                        return jsonify({'error': 'Invalid file'}), 400
-
-                    section_name = request.form.get(f'section_{idx}', '').strip()
-                    if not section_name:
-                        return jsonify({'error': 'Section missing'}), 400
-
-                    files.append(file)
-                    sections.append(section_name)
-
-            all_questions = []
-            unique_sections = []
-
-            for idx, file in enumerate(files):
-                content = file.read().decode('utf-8', errors='ignore')
-                questions = parse_txt_file(content)
-
-                for q in questions:
-                    q['section'] = sections[idx]
-
-                all_questions.extend(questions)
-                if sections[idx] not in unique_sections:
-                    unique_sections.append(sections[idx])
-
-            quiz_id = str(uuid.uuid4())
-            TEMP_QUIZ_DATA[quiz_id] = {
-                "questions": all_questions,
-                "quiz_type": quiz_type,
-                "sections": unique_sections
-            }
-
-            return jsonify({'quiz_id': quiz_id})
-
-        else:
+        if quiz_type == 'topic':
             file = request.files.get('file')
             if not file or not file.filename.endswith('.txt'):
                 return jsonify({'error': 'Invalid file'}), 400
@@ -204,10 +122,45 @@ def upload():
             content = file.read().decode('utf-8', errors='ignore')
             questions = parse_txt_file(content)
 
+            if not questions:
+                return jsonify({'error': 'No questions parsed'}), 400
+
             quiz_id = str(uuid.uuid4())
             TEMP_QUIZ_DATA[quiz_id] = {
                 "questions": questions,
                 "quiz_type": quiz_type
+            }
+
+            return jsonify({'quiz_id': quiz_id})
+
+        # FULL MOCK
+        else:
+            files = []
+            sections = []
+
+            for key in request.files:
+                if key.startswith("file_"):
+                    idx = key.split("_")[1]
+                    file = request.files[key]
+                    section_name = request.form.get(f'section_{idx}', '').strip()
+
+                    if not file or not section_name:
+                        return jsonify({'error': 'Section missing'}), 400
+
+                    content = file.read().decode('utf-8', errors='ignore')
+                    qs = parse_txt_file(content)
+
+                    for q in qs:
+                        q["section"] = section_name
+
+                    files.extend(qs)
+                    sections.append(section_name)
+
+            quiz_id = str(uuid.uuid4())
+            TEMP_QUIZ_DATA[quiz_id] = {
+                "questions": files,
+                "quiz_type": quiz_type,
+                "sections": sections
             }
 
             return jsonify({'quiz_id': quiz_id})
@@ -234,7 +187,6 @@ def preview(quiz_id):
 @app.route('/upload_image', methods=['POST'])
 def upload_image():
     file = request.files.get('image')
-
     if not file or not file.mimetype.startswith("image/"):
         return jsonify({'error': 'Invalid image'}), 400
 
@@ -254,14 +206,10 @@ def generate():
     with open(template_file, 'r', encoding='utf-8') as f:
         template = f.read()
 
-    questions_js = json.dumps(questions, ensure_ascii=False)
-    seconds = int(data.get("time", 25)) * 60
-
     html = template.replace("{quiz_name}", quiz_name)
-    html = html.replace("{questions_array}", questions_js)
-    html = html.replace("{seconds}", str(seconds))
+    html = html.replace("{questions_array}", json.dumps(questions, ensure_ascii=False))
+    html = html.replace("{seconds}", str(int(data.get("time", 25)) * 60))
 
-    # Memory cleanup
     TEMP_QUIZ_DATA.clear()
 
     response = Response(html, mimetype='text/html')
