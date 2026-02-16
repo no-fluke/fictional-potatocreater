@@ -596,14 +596,29 @@ mjx-container {
   // ---------- QUIZ FUNCTIONS ----------
   function initQuiz() {
     el("qtotal").textContent = QUESTIONS.length;
-    const resultSaved = localStorage.getItem(QUIZ_RESULT_KEY);
-    if (resultSaved) {
-      const data = JSON.parse(resultSaved);
-      if (data.submitted && data.resultHTML) {
-        showSavedResult(data);
-        return;
+
+    // Check if we have a saved result
+    const savedResult = localStorage.getItem(QUIZ_RESULT_KEY);
+    if (savedResult) {
+      try {
+        const payload = JSON.parse(savedResult);
+        // Ensure it's a valid result payload (has score, etc.)
+        if (payload && typeof payload === 'object' && payload.score !== undefined) {
+          // Stop any running timer
+          if (timerInterval) clearInterval(timerInterval);
+          // Hide quiz UI and show results
+          el("quizCard").style.display = "none";
+          el("floatBar").style.display = "none";
+          displayResults(payload, false); // false = don't save again
+          return;
+        }
+      } catch (e) {
+        console.warn("Failed to parse saved result", e);
+        localStorage.removeItem(QUIZ_RESULT_KEY);
       }
     }
+
+    // No saved result, load quiz state if any
     const saved = localStorage.getItem(QUIZ_STATE_KEY);
     if (saved) {
       const state = JSON.parse(saved);
@@ -617,18 +632,6 @@ mjx-container {
     attachListeners();
     buildPalette();
     highlightPalette();
-    renderMath();
-  }
-
-  function showSavedResult(data) {
-    el("quizCard").style.display = "none";
-    el("floatBar").style.display = "none";
-    el("results").innerHTML = data.resultHTML;
-    el("results").style.display = "block";
-    if (data.headerHTML) {
-      el("headerControls").innerHTML = data.headerHTML;
-      rebindResultHeaderActions();
-    }
     renderMath();
   }
 
@@ -857,11 +860,16 @@ mjx-container {
       }
     });
 
-    displayResults(payload);
+    // Store result in localStorage so it persists after refresh
+    localStorage.setItem(QUIZ_RESULT_KEY, JSON.stringify(payload));
+    // Remove quiz state so it doesn't restart
+    localStorage.removeItem(QUIZ_STATE_KEY);
+
+    displayResults(payload, true); // true = save to storage (already done)
   }
 
   // ---------- DISPLAY RESULTS (4 TABS) ----------
-  function displayResults(payload) {
+  function displayResults(payload, saveToStorage = false) {
     el("quizCard").style.display = "none";
     el("floatBar").style.display = "none";
 
