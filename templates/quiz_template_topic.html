@@ -629,9 +629,15 @@ mjx-container {
     current = i;
     const q = QUESTIONS[i];
     el("qindex").textContent = i+1;
-    el("qtext").innerHTML = q.question || "";
+    // Question text and image
+    let qHTML = q.question || "";
+    if (q.question_image) {
+      qHTML += `<div><img src="${q.question_image}" alt="Question image" style="max-width:100%; margin-top:10px; border-radius:8px;"></div>`;
+    }
+    el("qtext").innerHTML = qHTML;
     normalizeMathForQuiz(el("qtext"));
     renderMath();
+
     el("marking").innerHTML = `Marking: <span style="color:var(--success)">+${Number(q.correct_score ?? 1)}</span> / <span style="color:var(--danger)">-${Number(q.negative_score ?? 0)}</span>`;
     const opts = el("options");
     opts.innerHTML = "";
@@ -642,9 +648,14 @@ mjx-container {
       if(!q[k]) return;
       const div = document.createElement("div");
       div.className = "opt";
-      div.innerHTML = `<div class="custom-radio"></div><div style="flex:1">${q[k]}</div>`;
+      const optImg = q[`option_image_${idx+1}`];
+      let inner = `<div class="custom-radio"></div>`;
+      if (optImg) {
+        inner += `<img src="${optImg}" alt="" style="max-width:40px; max-height:40px; object-fit:contain; margin-right:8px;">`;
+      }
+      inner += `<div style="flex:1">${q[k]}</div>`;
+      div.innerHTML = inner;
 
-      // Quiz mode: show selected only, no correct/wrong yet
       if (userAns === String(idx+1)) div.classList.add("selected");
       div.addEventListener("click", () => selectOption(q, idx+1, div));
 
@@ -786,9 +797,9 @@ mjx-container {
     const timeTaken = TOTAL_TIME_SECONDS - seconds;
 
     let correct = 0, wrong = 0, totalMarks = 0, maxMarks = 0;
-    QUESTIONS.forEach(q => {
+    QUESTIONS.forEach((q, i) => {
       maxMarks += Number(q.correct_score ?? 1);
-      const ans = answers[q.id ?? q];
+      const ans = answers[q.id ?? i];
       if (ans && String(ans) === String(q.answer)) {
         correct++;
         totalMarks += Number(q.correct_score ?? 1);
@@ -871,7 +882,15 @@ mjx-container {
       const isCorrect = ans && String(ans) === String(q.answer);
       const status = !ans ? "unattempted" : (isCorrect ? "correct" : "wrong");
       reviewHTML += `<div class="card result-q" data-status="${status}">`;
-      reviewHTML += `<div style="font-weight:700; margin-bottom:8px">Q${i+1}: ${q.question}</div>`;
+
+      // Question with image
+      let qText = q.question || "";
+      if (q.question_image) {
+        qText += `<div><img src="${q.question_image}" alt="Question image" style="max-width:100%; margin-top:8px; border-radius:8px;"></div>`;
+      }
+      reviewHTML += `<div style="font-weight:700; margin-bottom:8px">Q${i+1}: ${qText}</div>`;
+
+      // Options with images
       ["option_1","option_2","option_3","option_4","option_5"].forEach((key, j) => {
         if(!q[key]) return;
         const idx = j+1;
@@ -880,11 +899,25 @@ mjx-container {
         let style = "border:1px solid var(--border); background:var(--card);";
         if(isOptCorrect) style = "border:2px solid var(--success); background:rgba(31,158,90,0.12);";
         else if(isUser && !isOptCorrect) style = "border:2px solid var(--danger); background:rgba(200,45,63,0.12);";
-        reviewHTML += `<div style="padding:8px; margin:6px 0; border-radius:8px; ${style}">${q[key]}</div>`;
+
+        let optHtml = `<div style="padding:8px; margin:6px 0; border-radius:8px; ${style}">`;
+        const optImg = q[`option_image_${idx}`];
+        if (optImg) {
+          optHtml += `<img src="${optImg}" alt="" style="max-width:40px; max-height:40px; object-fit:contain; vertical-align:middle; margin-right:8px;">`;
+        }
+        optHtml += q[key] + '</div>';
+        reviewHTML += optHtml;
       });
+
       const scoreText = isCorrect ? `+${q.correct_score}` : (ans ? `-${q.negative_score}` : "0");
       reviewHTML += `<div><strong>Score:</strong> ${scoreText}</div>`;
-      if(q.solution_text) reviewHTML += `<div class="explanation" style="display:block; margin-top:8px"><strong>Explanation:</strong> ${q.solution_text}</div>`;
+
+      if(q.solution_text) {
+        reviewHTML += `<div class="explanation" style="display:block; margin-top:8px"><strong>Explanation:</strong> ${q.solution_text}</div>`;
+      }
+      if(q.solution_image) {
+        reviewHTML += `<div><img src="${q.solution_image}" alt="Solution image" style="max-width:100%; margin-top:8px;"></div>`;
+      }
       reviewHTML += `</div>`;
     });
 
