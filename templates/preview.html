@@ -14,11 +14,18 @@
         .question-card { border: 1px solid #ccc; padding: 15px; margin-bottom: 20px; border-radius: 8px; background: white; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
         .question-header { display: flex; justify-content: space-between; margin-bottom: 10px; }
         .question-header h3 { margin: 0; color: #2ec4b6; }
-        .options-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; }
+        .options-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 10px; } /* slightly wider min */
         .option-item { border: 1px dashed #aaa; padding: 8px; border-radius: 4px; background: #fafafa; }
-        .image-preview { max-width: 150px; max-height: 150px; margin-top: 5px; }
-        .image-preview img { max-width: 100%; max-height: 100%; border-radius: 4px; }
+        .image-preview { max-width: 150px; max-height: 150px; margin-top: 5px; position: relative; display: inline-block; }
+        .image-preview img { max-width: 100%; max-height: 100%; border-radius: 4px; display: block; }
         .btn-upload-image { margin-top: 5px; background: #3498db; color: white; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer; }
+        .btn-remove-image { 
+            position: absolute; top: 0; right: 0; background: #c82d3f; color: white; 
+            border: none; border-radius: 50%; width: 20px; height: 20px; 
+            font-size: 12px; line-height: 1; cursor: pointer; padding: 0;
+            display: flex; align-items: center; justify-content: center;
+        }
+        .btn-remove-image:hover { background: #a02030; }
         .crop-container { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 1000; justify-content: center; align-items: center; }
         .crop-box { background: white; padding: 20px; border-radius: 8px; max-width: 90%; max-height: 90%; overflow: auto; }
         .crop-image { max-width: 100%; max-height: 70vh; }
@@ -30,6 +37,8 @@
         .deleteBtn { background: #c82d3f; color: white; }
         label { font-weight: bold; }
         .section-select { margin-bottom: 10px; }
+        /* make option textareas more compact */
+        .option-item textarea { width: 100%; box-sizing: border-box; resize: vertical; }
     </style>
 </head>
 <body>
@@ -103,6 +112,26 @@
                 return q;
             }
 
+            // Helper to remove an image
+            function removeImage(index, field) {
+                // Clear the data
+                questions[index][field] = '';
+                // Update the preview div
+                let previewId;
+                if (field === 'question_image') {
+                    previewId = `q-img-${index}`;
+                } else if (field.startsWith('option_image_')) {
+                    const optNum = field.split('_')[2];
+                    previewId = `opt-img-${index}-${optNum}`;
+                } else if (field === 'solution_image') {
+                    previewId = `sol-img-${index}`;
+                }
+                const previewDiv = document.getElementById(previewId);
+                if (previewDiv) {
+                    previewDiv.innerHTML = ''; // remove img and button
+                }
+            }
+
             // Render all questions
             function renderQuestions() {
                 const container = document.getElementById('questionsContainer');
@@ -143,6 +172,22 @@
                         `;
                     }
 
+                    // Build preview with optional remove button for question image
+                    const questionImageHtml = q.question_image ? 
+                        `<img src="${q.question_image}"><button class="btn-remove-image" data-index="${idx}" data-field="question_image">✕</button>` : '';
+
+                    // Option images preview + remove
+                    const optionPreviews = [1,2,3,4,5].map(i => {
+                        const imgField = `option_image_${i}`;
+                        const imgHtml = q[imgField] ? 
+                            `<img src="${q[imgField]}"><button class="btn-remove-image" data-index="${idx}" data-field="${imgField}">✕</button>` : '';
+                        return `<div class="image-preview" id="opt-img-${idx}-${i}">${imgHtml}</div>`;
+                    });
+
+                    // Solution image preview + remove
+                    const solutionImageHtml = q.solution_image ? 
+                        `<img src="${q.solution_image}"><button class="btn-remove-image" data-index="${idx}" data-field="solution_image">✕</button>` : '';
+
                     card.innerHTML = `
                         <div class="question-header">
                             <h3>Question ${idx+1}</h3>
@@ -155,15 +200,15 @@
                         <div>
                             <label>Question Text:</label>
                             <textarea class="q-text" data-index="${idx}" rows="3" style="width:100%">${q.question || ''}</textarea>
-                            <div class="image-preview" id="q-img-${idx}">${q.question_image ? `<img src="${q.question_image}">` : ''}</div>
+                            <div class="image-preview" id="q-img-${idx}">${questionImageHtml}</div>
                             <button class="btn-upload-image" data-index="${idx}" data-field="question_image">Upload Image</button>
                         </div>
                         <div class="options-grid">
                             ${[1,2,3,4,5].map(i => `
                                 <div class="option-item">
                                     <label>Option ${i}:</label>
-                                    <input type="text" class="q-opt" data-index="${idx}" data-opt="${i}" value="${q[`option_${i}`] || ''}" style="width:100%">
-                                    <div class="image-preview" id="opt-img-${idx}-${i}">${q[`option_image_${i}`] ? `<img src="${q[`option_image_${i}`]}">` : ''}</div>
+                                    <textarea class="q-opt" data-index="${idx}" data-opt="${i}" rows="2" style="width:100%">${q[`option_${i}`] || ''}</textarea>
+                                    ${optionPreviews[i-1]}
                                     <button class="btn-upload-image" data-index="${idx}" data-field="option_image_${i}">Upload</button>
                                 </div>
                             `).join('')}
@@ -175,7 +220,7 @@
                         <div>
                             <label>Explanation:</label>
                             <textarea class="q-solution" data-index="${idx}" rows="2" style="width:100%">${q.solution_text || ''}</textarea>
-                            <div class="image-preview" id="sol-img-${idx}">${q.solution_image ? `<img src="${q.solution_image}">` : ''}</div>
+                            <div class="image-preview" id="sol-img-${idx}">${solutionImageHtml}</div>
                             <button class="btn-upload-image" data-index="${idx}" data-field="solution_image">Upload</button>
                         </div>
                     `;
@@ -202,6 +247,18 @@
                             }
                         };
                         fileInput.click();
+                    });
+                });
+
+                // Remove image buttons
+                document.querySelectorAll('.btn-remove-image').forEach(btn => {
+                    btn.addEventListener('click', (e) => {
+                        e.stopPropagation(); // avoid any parent triggers
+                        const index = e.target.dataset.index;
+                        const field = e.target.dataset.field;
+                        if (index !== undefined && field) {
+                            removeImage(index, field);
+                        }
                     });
                 });
 
@@ -250,7 +307,7 @@
                     });
                 });
 
-                // Real-time updates for inputs
+                // Real-time updates for inputs (including textareas)
                 document.querySelectorAll('.q-text').forEach(inp => {
                     inp.addEventListener('input', (e) => {
                         const idx = e.target.dataset.index;
@@ -321,11 +378,20 @@
                         questions[idx][field] = data.base64;
                         // Update preview
                         const previewId = field === 'question_image' ? `q-img-${idx}` :
-                                          field.startsWith('option_image') ? `opt-img-${idx}-${field.split('_')[2]}` :
+                                          field.startsWith('option_image_') ? `opt-img-${idx}-${field.split('_')[2]}` :
                                           `sol-img-${idx}`;
                         const previewDiv = document.getElementById(previewId);
                         if (previewDiv) {
-                            previewDiv.innerHTML = `<img src="${data.base64}" style="max-width:100px;">`;
+                            // Replace content with new image + remove button (consistent with render)
+                            previewDiv.innerHTML = `<img src="${data.base64}"><button class="btn-remove-image" data-index="${idx}" data-field="${field}">✕</button>`;
+                            // Re-attach listener to this new remove button
+                            const newRemove = previewDiv.querySelector('.btn-remove-image');
+                            if (newRemove) {
+                                newRemove.addEventListener('click', (e) => {
+                                    e.stopPropagation();
+                                    removeImage(e.target.dataset.index, e.target.dataset.field);
+                                });
+                            }
                         }
                     }
                     document.getElementById('cropModal').style.display = 'none';
