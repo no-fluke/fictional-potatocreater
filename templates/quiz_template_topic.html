@@ -467,7 +467,7 @@ mjx-container {
   const db = firebase.database();
 
   // ---------- CONFIGURATION ----------
-  const LOGIN_PAGE_URL = "login.html";
+  const LOGIN_PAGE_URL = "https://no-fluke.github.io/website-finial/login.html";
   // -----------------------------------
 
   // Quiz data from Python
@@ -974,18 +974,17 @@ mjx-container {
         const tabName = e.target.dataset.tab;
         document.getElementById(`section-${tabName}`).classList.add('active');
         if (tabName === 'leaderboard') {
-          loadLeaderboard();
+          loadLeaderboard(); // leaderboard already uses quiz_results
         } else if (tabName === 'history') {
-          loadAttemptHistory();
+          loadAttemptHistory(); // history still uses attempt_history
         }
       });
     });
 
-    // Compute rank and percentile initially (based on all attempts)
-    db.ref(`attempt_history/${QUIZ_TITLE}`).once("value").then(snap => {
+    // Compute rank and percentile based on FIRST ATTEMPTS (quiz_results)
+    db.ref(`quiz_results/${QUIZ_TITLE}`).once("value").then(snap => {
       const data = snap.val() || {};
-      let attempts = [];
-      Object.values(data).forEach(u => Object.values(u).forEach(a => attempts.push(a)));
+      const attempts = Object.values(data);
       attempts.sort((a,b) => b.score - a.score || a.timeTaken - b.timeTaken);
       let rank = 1;
       for (let i=0; i<attempts.length; i++) {
@@ -1007,21 +1006,24 @@ mjx-container {
     if (!rankSpan || !percentileSpan) return;
     rankSpan.textContent = '...';
     percentileSpan.textContent = '...';
-    db.ref(`attempt_history/${QUIZ_TITLE}`).once("value").then(snap => {
+
+    // Use quiz_results (first attempts) only
+    db.ref(`quiz_results/${QUIZ_TITLE}`).once("value").then(snap => {
       const data = snap.val() || {};
-      let attempts = [];
-      Object.values(data).forEach(u => Object.values(u).forEach(a => attempts.push(a)));
+      const attempts = Object.values(data);
       attempts.sort((a,b) => b.score - a.score || a.timeTaken - b.timeTaken);
-      const userAttempts = attempts.filter(a => a.userId === currentUser.uid);
-      if (userAttempts.length === 0) {
+
+      // Find the current user's first attempt (the one saved in quiz_results)
+      const userFirstAttempt = attempts.find(a => a.userId === currentUser.uid);
+      if (!userFirstAttempt) {
         rankSpan.textContent = 'N/A';
         percentileSpan.textContent = 'N/A';
         return;
       }
-      const latest = userAttempts.sort((a,b) => b.submittedAt - a.submittedAt)[0];
+
       let rank = 1;
       for (let i=0; i<attempts.length; i++) {
-        if (attempts[i].userId === latest.userId && attempts[i].submittedAt === latest.submittedAt) {
+        if (attempts[i].userId === userFirstAttempt.userId && attempts[i].submittedAt === userFirstAttempt.submittedAt) {
           rank = i+1;
           break;
         }
