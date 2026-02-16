@@ -102,7 +102,7 @@ h1 { margin: 0; color: var(--accent); font-size: 18px; }
   border-radius: 30px;
   border: 1px solid var(--border);
   white-space: nowrap;
-  max-width: 160px;          /* prevent overflow */
+  max-width: 160px;
   overflow: hidden;
   text-overflow: ellipsis;
 }
@@ -865,24 +865,18 @@ mjx-container {
     el("quizCard").style.display = "none";
     el("floatBar").style.display = "none";
 
-    // ----- Review tab HTML (questions + answers) -----
-    let reviewHTML = `<div class="card"><h3 style="color:var(--accent)">Results Summary</h3>
-      <div class="stats">
-        <div class="stat"><h4>Score</h4><p>${payload.score} / ${payload.maxMarks}</p></div>
-        <div class="stat"><h4>Correct</h4><p>${payload.correct}</p></div>
-        <div class="stat"><h4>Wrong</h4><p>${payload.wrong}</p></div>
-        <div class="stat"><h4>Unattempted</h4><p>${payload.unattempted}</p></div>
-        <div class="stat"><h4>Accuracy</h4><p>${payload.accuracy}%</p></div>
-        <div class="stat"><h4>Time</h4><p>${fmt(payload.timeTaken)}</p></div>
-      </div>
-      <div style="display:flex;gap:8px;flex-wrap:wrap;margin:10px 0">
+    // ----- Review tab HTML (questions + filter buttons) -----
+    // Filter buttons first
+    let reviewHTML = `
+      <div style="display:flex; gap:8px; flex-wrap:wrap; margin:10px 0;">
         <button class="btn-ghost" onclick="filterResults('all')">ALL</button>
         <button class="btn-ghost" onclick="filterResults('correct')">CORRECT</button>
         <button class="btn-ghost" onclick="filterResults('wrong')">WRONG</button>
         <button class="btn-ghost" onclick="filterResults('unattempted')">UNATTEMPTED</button>
       </div>
-    </div>`;
+    `;
 
+    // Then each question card
     QUESTIONS.forEach((q, i) => {
       const qid = q.id ?? i;
       const ans = answers[qid];
@@ -932,7 +926,7 @@ mjx-container {
     const summaryHTML = `
       <div class="stats-grid" style="display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); gap:16px; padding:16px;">
         <div class="stat-card" style="background:var(--bg); border-radius:12px; padding:16px; text-align:center;">
-          <div style="font-size:28px; font-weight:700; color:var(--accent);">${payload.score}</div>
+          <div style="font-size:28px; font-weight:700; color:var(--accent);">${payload.score} / ${payload.maxMarks}</div>
           <div style="color:var(--muted);">Total Score</div>
         </div>
         <div class="stat-card" style="background:var(--bg); border-radius:12px; padding:16px; text-align:center;">
@@ -975,16 +969,16 @@ mjx-container {
     // ----- History tab HTML -----
     const historyHTML = `<div id="historyList" style="padding:16px;">Loading your attempt history...</div>`;
 
-    // Four tabs
+    // Four tabs - Summary first, then Review, Leaderboard, History
     const finalHTML = `
       <div class="tabs" id="resultTabs">
-        <button class="tab active" data-tab="review">Review</button>
-        <button class="tab" data-tab="summary">Summary</button>
+        <button class="tab active" data-tab="summary">Summary</button>
+        <button class="tab" data-tab="review">Review</button>
         <button class="tab" data-tab="leaderboard">Leaderboard</button>
         <button class="tab" data-tab="history">History</button>
       </div>
-      <div class="section active" id="section-review">${reviewHTML}</div>
-      <div class="section" id="section-summary">${summaryHTML}</div>
+      <div class="section active" id="section-summary">${summaryHTML}</div>
+      <div class="section" id="section-review">${reviewHTML}</div>
       <div class="section" id="section-leaderboard">${leaderboardHTML}</div>
       <div class="section" id="section-history">${historyHTML}</div>
     `;
@@ -1014,9 +1008,9 @@ mjx-container {
         const tabName = e.target.dataset.tab;
         document.getElementById(`section-${tabName}`).classList.add('active');
         if (tabName === 'leaderboard') {
-          loadLeaderboard(); // leaderboard already uses quiz_results
+          loadLeaderboard();
         } else if (tabName === 'history') {
-          loadAttemptHistory(); // history still uses attempt_history
+          loadAttemptHistory();
         }
       });
     });
@@ -1027,14 +1021,16 @@ mjx-container {
       const attempts = Object.values(data);
       attempts.sort((a,b) => b.score - a.score || a.timeTaken - b.timeTaken);
       let rank = 1;
+      // If there are no other attempts, treat total as 1 so rank shows 1/1
+      const totalAttempts = attempts.length || 1;
       for (let i=0; i<attempts.length; i++) {
         if (attempts[i].userId === payload.userId && attempts[i].submittedAt === payload.submittedAt) {
           rank = i+1;
           break;
         }
       }
-      const percentile = attempts.length ? ((attempts.length - rank) / attempts.length * 100).toFixed(1) : "0.0";
-      document.getElementById('rankValue').textContent = rank + '/' + attempts.length;
+      const percentile = ((totalAttempts - rank) / totalAttempts * 100).toFixed(1);
+      document.getElementById('rankValue').textContent = rank + '/' + totalAttempts;
       document.getElementById('percentileValue').textContent = percentile + '%';
     });
   }
@@ -1068,8 +1064,9 @@ mjx-container {
           break;
         }
       }
-      const percentile = attempts.length ? ((attempts.length - rank) / attempts.length * 100).toFixed(1) : "0.0";
-      rankSpan.textContent = rank + '/' + attempts.length;
+      const totalAttempts = attempts.length || 1;
+      const percentile = ((totalAttempts - rank) / totalAttempts * 100).toFixed(1);
+      rankSpan.textContent = rank + '/' + totalAttempts;
       percentileSpan.textContent = percentile + '%';
     }).catch(console.error);
   }
