@@ -181,7 +181,7 @@ h1 { margin: 0; color: var(--accent); font-size: 18px; }
 }
 .qmeta { font-size: 13px; color: var(--muted); }
 .marking { font-size: 13px; color: var(--muted); }
-.qtext { font-size: 16px; margin: 6px 0; font-weight: 500; }
+.qtext { font-size: 16px; margin: 6px 0; font-weight: 500; word-break: break-word; }
 .opt {
   padding: 12px;
   border: 1px solid var(--border);
@@ -194,6 +194,7 @@ h1 { margin: 0; color: var(--accent); font-size: 18px; }
   transition: all 0.12s;
   font-weight: 500;
   min-height: 52px;
+  word-break: break-word;
 }
 .opt:hover { border-color: var(--accent); }
 .opt.selected { border-color: var(--accent); }
@@ -211,6 +212,7 @@ h1 { margin: 0; color: var(--accent); font-size: 18px; }
   width: 16px;
   border-radius: 50%;
   border: 2px solid #ccc;
+  flex-shrink: 0;
 }
 .opt.selected .custom-radio {
   display: block;
@@ -273,7 +275,7 @@ h1 { margin: 0; color: var(--accent); font-size: 18px; }
 /* palette popup */
 #palette {
   position: fixed;
-  top: 64px;
+  top: 70px;
   right: 14px;
   background: var(--card);
   border-radius: 10px;
@@ -297,6 +299,7 @@ h1 { margin: 0; color: var(--accent); font-size: 18px; }
   cursor: pointer;
   font-weight: 700;
   color: var(--text);
+  flex-shrink: 0;
 }
 #palette .qbtn.attempted { background: var(--success); color: #fff; border: none; }
 #palette .qbtn.unattempted { background: var(--danger); color: #fff; border: none; }
@@ -318,7 +321,7 @@ h1 { margin: 0; color: var(--accent); font-size: 18px; }
   background: var(--card);
   border-radius: 12px;
   padding: 18px;
-  max-width: 500px;  /* slightly wider for table */
+  max-width: 500px;
   width: 92%;
   text-align: center;
   box-shadow: 0 8px 24px rgba(0,0,0,0.18);
@@ -340,10 +343,12 @@ h1 { margin: 0; color: var(--accent); font-size: 18px; }
   margin: 10px 0;
   font-size: 14px;
   overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
 }
 .section-stats table {
   width: 100%;
   border-collapse: collapse;
+  min-width: 400px; /* ensures scrolling on small screens */
 }
 .section-stats th, .section-stats td {
   padding: 8px 6px;
@@ -353,6 +358,13 @@ h1 { margin: 0; color: var(--accent); font-size: 18px; }
 .section-stats th {
   color: var(--muted);
   font-weight: 600;
+  background: var(--bg);
+}
+.section-stats tr:last-child td {
+  border-bottom: none;
+}
+.section-stats .total-row {
+  font-weight: 700;
   background: var(--bg);
 }
 
@@ -417,7 +429,7 @@ mjx-container {
   .container { padding: 8px; }
   .qtext { font-size: 15px; }
   .opt { padding: 10px; min-height: 48px; }
-  #palette { top: 120px; left: 50%; transform: translateX(-50%); max-width: 90%; }
+  #palette { top: 120px; left: 50%; transform: translateX(-50%); max-width: 90%; right: auto; }
   #palette .qbtn { width: 38px; height: 38px; }
   .stats { flex-direction: column; }
   .stat { flex: 1 1 auto; }
@@ -764,7 +776,7 @@ mjx-container {
       const optImg = q[`option_image_${idx+1}`];
       let inner = `<div class="custom-radio"></div>`;
       if (optImg) {
-        inner += `<img src="${optImg}" alt="" style="max-width:40px; max-height:40px; object-fit:contain; margin-right:8px;">`;
+        inner += `<img src="${optImg}" alt="" style="max-width:40px; max-height:40px; object-fit:contain; margin-right:8px; flex-shrink:0;">`;
       }
       inner += `<div style="flex:1">${q[k]}</div>`;
       div.innerHTML = inner;
@@ -1004,11 +1016,16 @@ mjx-container {
     el("quizCard").style.display = "none";
     el("floatBar").style.display = "none";
 
-    // Build section-wise table for summary
+    // Build section-wise table for summary (styled like popup)
     let sectionTableRows = '';
+    let totalAttempted = 0, totalCorrect = 0, totalWrong = 0, totalMarks = 0;
     if (sections.length > 0) {
       sections.forEach(s => {
         const st = payload.sectionStats?.[s] || { attempted:0, correct:0, wrong:0, marks:0 };
+        totalAttempted += st.attempted;
+        totalCorrect += st.correct;
+        totalWrong += st.wrong;
+        totalMarks += st.marks;
         sectionTableRows += `<tr>
           <td>${s}</td>
           <td>${st.attempted}</td>
@@ -1017,6 +1034,8 @@ mjx-container {
           <td>${st.marks}</td>
         </tr>`;
       });
+      // Add total row
+      sectionTableRows += `<tr class="total-row"><td>Total</td><td>${totalAttempted}</td><td>${totalCorrect}</td><td>${totalWrong}</td><td>${totalMarks}</td></tr>`;
     }
 
     // ----- Review tab HTML (questions + filter buttons) -----
@@ -1113,14 +1132,16 @@ mjx-container {
       ${sections.length > 0 ? `
       <div style="margin-top:20px; padding:0 16px;">
         <h3 style="color:var(--accent);">Section-wise Performance</h3>
-        <table style="width:100%; border-collapse:collapse; background:var(--card); border-radius:8px; overflow:hidden;">
-          <thead style="background:var(--bg);">
-            <tr><th>Section</th><th>Att.</th><th>Correct</th><th>Wrong</th><th>Marks</th></tr>
-          </thead>
-          <tbody>
-            ${sectionTableRows}
-          </tbody>
-        </table>
+        <div class="section-stats">
+          <table>
+            <thead>
+              <tr><th>Section</th><th>Att.</th><th>Correct</th><th>Wrong</th><th>Marks</th></tr>
+            </thead>
+            <tbody>
+              ${sectionTableRows}
+            </tbody>
+          </table>
+        </div>
       </div>
       ` : ''}
       <div style="text-align:center; margin-top:16px;">
@@ -1305,7 +1326,7 @@ mjx-container {
           sectionTable += `<tr><td>${s}</td><td>${d.attempted}</td><td>${left}</td><td>${d.marked}</td></tr>`;
         });
         // Total row
-        sectionTable += `<tr style="font-weight:700; background:var(--bg);"><td>Total</td><td>${totalAttempted}</td><td>${totalLeft}</td><td>${totalMarked}</td></tr>`;
+        sectionTable += `<tr class="total-row"><td>Total</td><td>${totalAttempted}</td><td>${totalLeft}</td><td>${totalMarked}</td></tr>`;
         sectionTable += '</table></div>';
         // Overall summary
         sectionTable += `<div style="margin-top:8px; text-align:center;">Overall: ${totalAttempted} / ${totalQuestions} Attempted</div>`;
