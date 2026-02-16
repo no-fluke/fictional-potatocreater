@@ -318,7 +318,7 @@ h1 { margin: 0; color: var(--accent); font-size: 18px; }
   background: var(--card);
   border-radius: 12px;
   padding: 18px;
-  max-width: 420px;
+  max-width: 500px;  /* slightly wider for table */
   width: 92%;
   text-align: center;
   box-shadow: 0 8px 24px rgba(0,0,0,0.18);
@@ -339,18 +339,21 @@ h1 { margin: 0; color: var(--accent); font-size: 18px; }
   text-align: left;
   margin: 10px 0;
   font-size: 14px;
+  overflow-x: auto;
 }
 .section-stats table {
   width: 100%;
   border-collapse: collapse;
 }
 .section-stats th, .section-stats td {
-  padding: 6px;
+  padding: 8px 6px;
   border-bottom: 1px solid var(--border);
+  text-align: center;
 }
 .section-stats th {
   color: var(--muted);
   font-weight: 600;
+  background: var(--bg);
 }
 
 /* results */
@@ -1112,7 +1115,7 @@ mjx-container {
         <h3 style="color:var(--accent);">Section-wise Performance</h3>
         <table style="width:100%; border-collapse:collapse; background:var(--card); border-radius:8px; overflow:hidden;">
           <thead style="background:var(--bg);">
-            <tr><th>Section</th><th>Attempted</th><th>Correct</th><th>Wrong</th><th>Marks</th></tr>
+            <tr><th>Section</th><th>Att.</th><th>Correct</th><th>Wrong</th><th>Marks</th></tr>
           </thead>
           <tbody>
             ${sectionTableRows}
@@ -1269,26 +1272,52 @@ mjx-container {
       e.stopPropagation();
       togglePalette();
     });
+
+    // ----- SUBMIT BUTTON with enhanced section table (like screenshot) -----
     el("submitBtn").addEventListener("click", () => {
-      const attempted = Object.keys(answers).length;
-      // Build section-wise attempted message
-      let sectionMsg = '';
+      // Build section-wise table with Att., Left, Marked
+      let sectionTable = '';
       if (sections.length > 0) {
-        const secAttempts = {};
-        sections.forEach(s => secAttempts[s] = 0);
-        QUESTIONS.forEach((q, i) => {
-          const ans = answers[q.id ?? i];
-          if (ans && q.section) secAttempts[q.section]++;
-        });
-        sectionMsg = '<div class="section-stats"><table><tr><th>Section</th><th>Attempted</th></tr>';
+        // Initialize counters per section
+        const secData = {};
         sections.forEach(s => {
-          sectionMsg += `<tr><td>${s}</td><td>${secAttempts[s]}</td></tr>`;
+          secData[s] = { total: 0, attempted: 0, marked: 0 };
         });
-        sectionMsg += '</table></div>';
+        // Count
+        QUESTIONS.forEach((q, idx) => {
+          const s = q.section;
+          if (s && secData[s]) {
+            secData[s].total++;
+            const qid = q.id ?? idx;
+            if (answers[qid]) secData[s].attempted++;
+            if (markedForReview.has(idx)) secData[s].marked++;
+          }
+        });
+        // Build rows
+        let totalAttempted = 0, totalLeft = 0, totalMarked = 0, totalQuestions = QUESTIONS.length;
+        sectionTable = '<div class="section-stats"><table><tr><th>Section</th><th>Att.</th><th>Left</th><th>Marked</th></tr>';
+        sections.forEach(s => {
+          const d = secData[s];
+          const left = d.total - d.attempted;
+          totalAttempted += d.attempted;
+          totalLeft += left;
+          totalMarked += d.marked;
+          sectionTable += `<tr><td>${s}</td><td>${d.attempted}</td><td>${left}</td><td>${d.marked}</td></tr>`;
+        });
+        // Total row
+        sectionTable += `<tr style="font-weight:700; background:var(--bg);"><td>Total</td><td>${totalAttempted}</td><td>${totalLeft}</td><td>${totalMarked}</td></tr>`;
+        sectionTable += '</table></div>';
+        // Overall summary
+        sectionTable += `<div style="margin-top:8px; text-align:center;">Overall: ${totalAttempted} / ${totalQuestions} Attempted</div>`;
+      } else {
+        // No sections, just overall
+        const attempted = Object.keys(answers).length;
+        sectionTable = `<div>You attempted ${attempted} of ${QUESTIONS.length} questions.</div>`;
       }
-      el("submitMsg").innerHTML = `You attempted ${attempted} of ${QUESTIONS.length} questions.${sectionMsg}<br>Submit?`;
+      el("submitMsg").innerHTML = sectionTable;
       el("submitModal").style.display = "flex";
     });
+
     el("cancelSubmit").addEventListener("click", () => el("submitModal").style.display = "none");
     el("confirmSubmit").addEventListener("click", () => {
       el("submitModal").style.display = "none";
