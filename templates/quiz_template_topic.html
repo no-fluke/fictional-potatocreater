@@ -69,8 +69,9 @@ h1 { margin: 0; color: var(--accent); font-size: 18px; }
   color: #fff;
   border: none;
   border-radius: 6px;
-  padding: 8px 12px;
-  font-size: 13px;
+  padding: 10px 14px;
+  min-height: 44px;
+  font-size: 14px;
   font-weight: 600;
   cursor: pointer;
   transition: background 0.18s;
@@ -97,17 +98,20 @@ h1 { margin: 0; color: var(--accent); font-size: 18px; }
   font-size: 14px;
   color: var(--accent);
   background: var(--card);
-  padding: 4px 10px;
+  padding: 6px 12px;
   border-radius: 30px;
   border: 1px solid var(--border);
   white-space: nowrap;
+  max-width: 160px;          /* prevent overflow */
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* Dark mode toggle pill */
 .theme-toggle {
   position: relative;
   width: 90px;
-  height: 30px;
+  height: 34px;
   background: #eaeef0;
   border-radius: 999px;
   cursor: pointer;
@@ -126,7 +130,7 @@ h1 { margin: 0; color: var(--accent); font-size: 18px; }
   top: 3px;
   left: 3px;
   width: 42px;
-  height: 24px;
+  height: 28px;
   background: var(--accent);
   border-radius: 999px;
   transition: 0.28s;
@@ -153,7 +157,7 @@ h1 { margin: 0; color: var(--accent); font-size: 18px; }
 .marking { font-size: 13px; color: var(--muted); }
 .qtext { font-size: 16px; margin: 6px 0; font-weight: 500; }
 .opt {
-  padding: 10px;
+  padding: 12px;
   border: 1px solid var(--border);
   border-radius: 8px;
   background: var(--card);
@@ -163,6 +167,7 @@ h1 { margin: 0; color: var(--accent); font-size: 18px; }
   gap: 10px;
   transition: all 0.12s;
   font-weight: 500;
+  min-height: 52px;
 }
 .opt:hover { border-color: var(--accent); }
 .opt.selected { border-color: var(--accent); }
@@ -219,7 +224,7 @@ h1 { margin: 0; color: var(--accent); font-size: 18px; }
   display: flex;
   justify-content: center;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   max-width: var(--maxw);
   width: 100%;
   padding: 10px;
@@ -229,10 +234,13 @@ h1 { margin: 0; color: var(--accent); font-size: 18px; }
   color: #fff;
   border: none;
   border-radius: 6px;
-  padding: 8px 12px;
+  padding: 10px 8px;
+  min-height: 44px;
+  min-width: 60px;
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
+  flex: 1 1 auto;
 }
 .fbar button:hover { background: var(--accent-dark); }
 
@@ -296,7 +304,7 @@ h1 { margin: 0; color: var(--accent); font-size: 18px; }
   background: linear-gradient(135deg, var(--accent), var(--accent-dark));
   color: #fff;
   border: none;
-  padding: 8px 14px;
+  padding: 10px 18px;
   border-radius: 999px;
   font-weight: 700;
   cursor: pointer;
@@ -359,26 +367,24 @@ mjx-container {
 @media (max-width: 768px) {
   .header-inner { flex-direction: column; gap: 8px; padding: 8px; }
   .fbar-inner { flex-wrap: wrap; padding: 8px; gap: 6px; }
-  .fbar button { padding: 6px 8px; font-size: 12px; flex: 1 1 80px; }
+  .fbar button { padding: 8px 6px; font-size: 12px; min-width: 50px; }
   .container { padding: 8px; }
   .qtext { font-size: 15px; }
-  .opt { padding: 8px; }
+  .opt { padding: 10px; min-height: 48px; }
   #palette { top: 120px; left: 50%; transform: translateX(-50%); max-width: 90%; }
   #palette .qbtn { width: 38px; height: 38px; }
   .stats { flex-direction: column; }
   .stat { flex: 1 1 auto; }
+  .user-name { max-width: 140px; }
 }
 @media (max-width: 480px) {
   .timer-text { font-size: 16px; }
   h1 { font-size: 16px; }
-  .btn, .btn-ghost { padding: 6px 10px; font-size: 12px; }
+  .btn, .btn-ghost { padding: 8px 10px; font-size: 12px; }
   .fbar-inner { gap: 4px; }
-  .fbar button { padding: 6px; font-size: 11px; }
+  .fbar button { padding: 8px 4px; font-size: 11px; min-width: 44px; }
   .card { padding: 8px; }
-}
-@media (min-width: 1024px) {
-  .container { max-width: 900px; }
-  .fbar-inner { max-width: 900px; }
+  .user-name { max-width: 110px; }
 }
 
 /* tabs for results */
@@ -400,6 +406,7 @@ mjx-container {
   color: var(--text);
   font-weight: 600;
   cursor: pointer;
+  min-height: 44px;
 }
 .tab.active {
   background: var(--accent);
@@ -1201,11 +1208,12 @@ mjx-container {
         <span>Dark</span>
       </div>
     </div>
-    <div style="display:flex; align-items:center; gap:10px">
-      <span class="user-name" id="userNameDisplay"></span>
+    <!-- Right side: timer, submit, view, then user name (far right) -->
+    <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
       <div class="timer-text" id="timer">00:00</div>
       <button id="submitBtn" class="btn">Submit</button>
       <button id="paletteBtn" class="btn-ghost">View</button>
+      <span class="user-name" id="userNameDisplay"></span>
     </div>
   </div>
 </header>
