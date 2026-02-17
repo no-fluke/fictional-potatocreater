@@ -706,6 +706,10 @@ mjx-container {
         const payload = JSON.parse(savedResult);
         // Validate that it has necessary fields (e.g., score)
         if (payload && typeof payload === 'object' && payload.score !== undefined) {
+          // --- FIX: Populate sections from QUESTIONS before displaying results ---
+          sections = [...new Set(QUESTIONS.map(q => q.section).filter(s => s))];
+          // ----------------------------------------------------------------------
+          
           // Stop any running timer
           if (timerInterval) clearInterval(timerInterval);
           // Hide quiz UI and show results
