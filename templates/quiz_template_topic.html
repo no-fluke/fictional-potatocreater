@@ -930,38 +930,46 @@ mjx-container {
       reviewHTML += `</div>`;
     });
 
-    // ----- Summary tab HTML (stats + rank/percentile + refresh button) -----
+    // ----- Summary tab HTML (stats + rank/percentile + refresh button) with emojis -----
     const summaryHTML = `
       <div class="stats-grid" style="display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); gap:16px; padding:16px;">
         <div class="stat-card" style="background:var(--bg); border-radius:12px; padding:16px; text-align:center;">
+          <div style="font-size:32px; margin-bottom:4px;">🏆</div>
           <div style="font-size:28px; font-weight:700; color:var(--accent);">${payload.score} / ${payload.maxMarks}</div>
           <div style="color:var(--muted);">Total Score</div>
         </div>
         <div class="stat-card" style="background:var(--bg); border-radius:12px; padding:16px; text-align:center;">
+          <div style="font-size:32px; margin-bottom:4px;">✅</div>
           <div style="font-size:28px; font-weight:700; color:var(--success);">${payload.correct}</div>
           <div style="color:var(--muted);">Correct</div>
         </div>
         <div class="stat-card" style="background:var(--bg); border-radius:12px; padding:16px; text-align:center;">
+          <div style="font-size:32px; margin-bottom:4px;">❌</div>
           <div style="font-size:28px; font-weight:700; color:var(--danger);">${payload.wrong}</div>
           <div style="color:var(--muted);">Wrong</div>
         </div>
         <div class="stat-card" style="background:var(--bg); border-radius:12px; padding:16px; text-align:center;">
+          <div style="font-size:32px; margin-bottom:4px;">⭕</div>
           <div style="font-size:28px; font-weight:700; color:var(--muted);">${payload.unattempted}</div>
           <div style="color:var(--muted);">Unattempted</div>
         </div>
         <div class="stat-card" style="background:var(--bg); border-radius:12px; padding:16px; text-align:center;">
+          <div style="font-size:32px; margin-bottom:4px;">🎯</div>
           <div style="font-size:28px; font-weight:700; color:var(--purple);">${payload.accuracy}%</div>
           <div style="color:var(--muted);">Accuracy</div>
         </div>
         <div class="stat-card" style="background:var(--bg); border-radius:12px; padding:16px; text-align:center;">
+          <div style="font-size:32px; margin-bottom:4px;">⏱️</div>
           <div style="font-size:28px; font-weight:700; color:var(--info);">${fmt(payload.timeTaken)}</div>
           <div style="color:var(--muted);">Time Taken</div>
         </div>
         <div class="stat-card" style="background:var(--bg); border-radius:12px; padding:16px; text-align:center;" id="rankCard">
+          <div style="font-size:32px; margin-bottom:4px;">🥇</div>
           <div style="font-size:28px; font-weight:700; color:var(--accent-dark);" id="rankValue">?</div>
           <div style="color:var(--muted);">Rank</div>
         </div>
         <div class="stat-card" style="background:var(--bg); border-radius:12px; padding:16px; text-align:center;" id="percentileCard">
+          <div style="font-size:32px; margin-bottom:4px;">📊</div>
           <div style="font-size:28px; font-weight:700; color:var(--accent-dark);" id="percentileValue">?</div>
           <div style="color:var(--muted);">Percentile</div>
         </div>
