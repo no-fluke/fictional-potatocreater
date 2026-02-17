@@ -139,14 +139,15 @@ h1 { margin: 0; color: var(--accent); font-size: 18px; }
 .theme-toggle.dark span:last-child { color: #fff; }
 .theme-toggle span:first-child { color: #fff; }
 
-/* Section tabs */
+/* Section tabs - now inside main container */
 .section-tabs {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
-  padding: 10px 14px;
-  background: var(--card);
-  border-top: 1px solid var(--border);
+  padding: 10px 0;          /* removed side padding to align with container */
+  margin-bottom: 10px;      /* space before question card */
+  background: transparent;   /* no background to blend with container */
+  border: none;             /* remove top border that was in header */
 }
 .section-tab {
   background: transparent;
@@ -434,7 +435,7 @@ mjx-container {
   .stats { flex-direction: column; }
   .stat { flex: 1 1 auto; }
   .user-name { max-width: 140px; }
-  .section-tabs { padding: 8px; }
+  .section-tabs { padding: 8px 0; }
   .section-tab { padding: 4px 10px; font-size: 12px; }
 }
 @media (max-width: 480px) {
@@ -1453,12 +1454,14 @@ mjx-container {
       <span class="user-name" id="userNameDisplay"></span>
     </div>
   </div>
-  <!-- Section tabs (will be populated dynamically) -->
-  <div class="section-tabs" id="sectionTabs"></div>
+  <!-- Section tabs have been removed from header -->
 </header>
 
 <!-- QUIZ CONTAINER (hidden initially) -->
 <div id="quizContainer" class="container" style="display:none;">
+  <!-- Section tabs moved here, above the question card -->
+  <div class="section-tabs" id="sectionTabs"></div>
+
   <div id="quizCard" class="card">
     <div class="qbar">
       <div class="qmeta">Question <span id="qindex">0</span> / <span id="qtotal">0</span></div>
