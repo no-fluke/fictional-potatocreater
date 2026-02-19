@@ -14,7 +14,7 @@
         .question-card { border: 1px solid #ccc; padding: 15px; margin-bottom: 20px; border-radius: 8px; background: white; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
         .question-header { display: flex; justify-content: space-between; margin-bottom: 10px; }
         .question-header h3 { margin: 0; color: #2ec4b6; }
-        .options-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 10px; } /* slightly wider min */
+        .options-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 10px; }
         .option-item { border: 1px dashed #aaa; padding: 8px; border-radius: 4px; background: #fafafa; }
         .image-preview { max-width: 150px; max-height: 150px; margin-top: 5px; position: relative; display: inline-block; }
         .image-preview img { max-width: 100%; max-height: 100%; border-radius: 4px; display: block; }
@@ -37,7 +37,9 @@
         .deleteBtn { background: #c82d3f; color: white; }
         label { font-weight: bold; }
         .section-select { margin-bottom: 10px; }
-        /* make option textareas more compact */
+        .mark-fields { margin: 10px 0; display: flex; gap: 20px; align-items: center; }
+        .mark-fields label { font-weight: normal; }
+        .mark-fields input { width: 80px; padding: 6px; border: 1px solid #ccc; border-radius: 4px; }
         .option-item textarea { width: 100%; box-sizing: border-box; resize: vertical; }
     </style>
 </head>
@@ -95,7 +97,7 @@
 
             let currentCrop = { target: null, file: null, field: null, index: null };
 
-            // Function to create a blank question
+            // Function to create a blank question (with default marks from global inputs)
             function createBlankQuestion() {
                 let q = {
                     question: "",
@@ -104,7 +106,9 @@
                     solution_text: "",
                     question_image: "",
                     option_image_1: "", option_image_2: "", option_image_3: "", option_image_4: "", option_image_5: "",
-                    solution_image: ""
+                    solution_image: "",
+                    correct_score: document.getElementById('marks').value || "3",
+                    negative_score: document.getElementById('negative').value || "1"
                 };
                 if (quizType === 'full') {
                     q.section = sections.length > 0 ? sections[0] : "General";
@@ -217,6 +221,17 @@
                             <label>Correct Answer (option number 1-5):</label>
                             <input type="number" class="q-answer" data-index="${idx}" min="1" max="5" value="${q.answer || ''}">
                         </div>
+
+                        <!-- 🔥 NEW: Per-question marks fields -->
+                        <div class="mark-fields">
+                            <label>Correct Mark: 
+                                <input type="number" class="q-correct" data-index="${idx}" step="0.1" min="0" value="${q.correct_score !== undefined ? q.correct_score : '3'}">
+                            </label>
+                            <label>Negative Mark: 
+                                <input type="number" class="q-negative" data-index="${idx}" step="0.1" min="0" value="${q.negative_score !== undefined ? q.negative_score : '1'}">
+                            </label>
+                        </div>
+
                         <div>
                             <label>Explanation:</label>
                             <textarea class="q-solution" data-index="${idx}" rows="2" style="width:100%">${q.solution_text || ''}</textarea>
@@ -307,7 +322,7 @@
                     });
                 });
 
-                // Real-time updates for inputs (including textareas)
+                // Real-time updates for inputs
                 document.querySelectorAll('.q-text').forEach(inp => {
                     inp.addEventListener('input', (e) => {
                         const idx = e.target.dataset.index;
@@ -325,6 +340,19 @@
                     inp.addEventListener('input', (e) => {
                         const idx = e.target.dataset.index;
                         questions[idx].answer = e.target.value;
+                    });
+                });
+                // 🔥 NEW: Listeners for mark fields
+                document.querySelectorAll('.q-correct').forEach(inp => {
+                    inp.addEventListener('input', (e) => {
+                        const idx = e.target.dataset.index;
+                        questions[idx].correct_score = e.target.value;
+                    });
+                });
+                document.querySelectorAll('.q-negative').forEach(inp => {
+                    inp.addEventListener('input', (e) => {
+                        const idx = e.target.dataset.index;
+                        questions[idx].negative_score = e.target.value;
                     });
                 });
                 document.querySelectorAll('.q-solution').forEach(inp => {
