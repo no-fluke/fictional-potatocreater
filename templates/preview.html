@@ -449,13 +449,21 @@
                 console.error('addQuestionBtn not found');
             }
 
-            // Generate final quiz
+            // 🔥 FIX: Generate final quiz – apply global marks to all questions before sending
             document.getElementById('generateBtn').addEventListener('click', async () => {
+                // Apply global marks to every question
+                const globalCorrect = document.getElementById('marks').value;
+                const globalNegative = document.getElementById('negative').value;
+                questions.forEach(q => {
+                    q.correct_score = globalCorrect;
+                    q.negative_score = globalNegative;
+                });
+
                 const quizData = {
                     quiz_name: document.getElementById('quizName').value || 'Quiz',
                     time: parseInt(document.getElementById('time').value) || 25,
-                    marks: parseFloat(document.getElementById('marks').value) || 3,
-                    negative: parseFloat(document.getElementById('negative').value) || 1,
+                    marks: parseFloat(globalCorrect) || 3,
+                    negative: parseFloat(globalNegative) || 1,
                     creator: document.getElementById('creator').value || 'Anonymous',
                     questions: questions,
                     quiz_type: quizType
