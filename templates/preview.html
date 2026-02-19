@@ -37,6 +37,7 @@
         .deleteBtn { background: #c82d3f; color: white; }
         label { font-weight: bold; }
         .section-select { margin-bottom: 10px; }
+        /* Mark fields */
         .mark-fields { margin: 10px 0; display: flex; gap: 20px; align-items: center; }
         .mark-fields label { font-weight: normal; }
         .mark-fields input { width: 80px; padding: 6px; border: 1px solid #ccc; border-radius: 4px; }
@@ -222,7 +223,7 @@
                             <input type="number" class="q-answer" data-index="${idx}" min="1" max="5" value="${q.answer || ''}">
                         </div>
 
-                        <!-- 🔥 NEW: Per-question marks fields -->
+                        <!-- 🔥 PER‑QUESTION MARKS FIELDS -->
                         <div class="mark-fields">
                             <label>Correct Mark: 
                                 <input type="number" class="q-correct" data-index="${idx}" step="0.1" min="0" value="${q.correct_score !== undefined ? q.correct_score : '3'}">
