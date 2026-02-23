@@ -1353,10 +1353,20 @@ mjx-container {
     });
 
     el("cancelSubmit").addEventListener("click", () => el("submitModal").style.display = "none");
+
+    // ---------- MODIFIED: CONFIRM SUBMIT NOW TRIGGERS POPUNDER ----------
     el("confirmSubmit").addEventListener("click", () => {
       el("submitModal").style.display = "none";
-      submitQuiz();
+      
+      // Trigger the Monetag popunder ad
+      triggerMonetagPopunder();
+      
+      // Slight delay to ensure popunder opens before showing results
+      setTimeout(() => {
+        submitQuiz();
+      }, 100);
     });
+
     // Theme toggle
     el("themeToggle").addEventListener("click", toggleTheme);
 
@@ -1366,6 +1376,24 @@ mjx-container {
         pal.style.display = "none";
       }
     });
+  }
+
+  // ---------- MONETAG POPUNDER FUNCTION ----------
+  function triggerMonetagPopunder() {
+    try {
+      // Create a new script element with the Monetag code
+      const script = document.createElement('script');
+      script.dataset.zone = '10643625';
+      script.src = 'https://al5sm.com/tag.min.js';
+      
+      // Append it to the body (or documentElement as fallback)
+      const target = document.body || document.documentElement;
+      target.appendChild(script);
+      
+      console.log('Monetag popunder triggered');
+    } catch (e) {
+      console.error('Failed to load Monetag ad:', e);
+    }
   }
 
   // ---------- PALETTE ----------
@@ -1517,5 +1545,5 @@ mjx-container {
   <div class="watermark" style="top:90%; left:10%;">RANKUP</div>
 </div>
 
-</body>
+</body> 
 </html>
