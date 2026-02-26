@@ -18,8 +18,8 @@ def parse_txt_file(content):
     """Parse various TXT file formats and extract questions"""
     questions = []
     
-    # Split by double newlines or question patterns
-    blocks = re.split(r'\n\s*\n|(?=Q\.\d+|\d+\.\s*[A-Z])', content.strip())
+    # Split by double newlines (blank lines) – this is the fix
+    blocks = re.split(r'\n\s*\n', content.strip())
     
     for block in blocks:
         block = block.strip()
