@@ -69,11 +69,58 @@ import os
 # ── Option label map ──────────────────────────────────────────────────────────
 OPTION_KEYS = ['a', 'b', 'c', 'd', 'e']
 
+# ── Compiled patterns ─────────────────────────────────────────────────────────
+
+# FIX 1: More robust Q.No splitter — allows optional leading whitespace and
+# optional trailing whitespace/text after the closing **. Also handles
+# variations like **Q.No:1** (no space) and **Q. No: 1**.
+QNUM_SPLIT = re.compile(r'(?=[ \t]*\*\*Q\.?\s*No\s*:\s*\d+\*\*)', re.IGNORECASE)
+QNUM_HEADER = re.compile(r'\*\*Q\.?\s*No\s*:\s*(\d+)\*\*', re.IGNORECASE)
+
+# FIX 3: Safer uppercase option prefix — only strip A./B./C./D. when the WHOLE
+# paragraph looks like an options list (i.e. every line starts with A–E dot).
+# We check this per-paragraph rather than blindly stripping every line.
+UPPER_OPT_LINE = re.compile(r'^([A-E])\.\s+(.+)$')
+
+# Bold section header (not a Q.No line)
+BOLD_HEADER = re.compile(r'^\s*\*\*([^*]+)\*\*\s*$')
+
 
 def clean_line(line: str) -> str:
-    """Strip markdown bold markers (**) and trailing whitespace/spaces."""
+    """Strip markdown bold markers (**) and trailing whitespace."""
     line = re.sub(r'\*\*', '', line)
     return line.rstrip()
+
+
+def _is_options_paragraph(para: list[str]) -> bool:
+    """
+    FIX 3 helper: Return True only when every line in the paragraph matches
+    the uppercase 'A. text' pattern — meaning the whole paragraph is an
+    A/B/C/D options block, not a question body that happens to mention 'A.'.
+    Requires at least 2 lines to avoid single-line false positives.
+    """
+    if len(para) < 2:
+        return False
+    return all(UPPER_OPT_LINE.match(line) for line in para)
+
+
+def _strip_upper_prefix(para: list[str]) -> list[str]:
+    """Strip A./B./C./D. prefix from each line in a confirmed options paragraph."""
+    return [UPPER_OPT_LINE.sub(r'\2', line).strip() for line in para]
+
+
+def _get_section_before(content: str, pos: int) -> str:
+    """
+    FIX 4: Find the most recent bold section header BEFORE position `pos`
+    in the content string (not just the very first one globally).
+    Returns empty string if none found.
+    """
+    section = ''
+    for line in content[:pos].split('\n'):
+        m = BOLD_HEADER.match(line.strip())
+        if m and 'Q.No' not in m.group(1) and 'Q. No' not in m.group(1):
+            section = m.group(1).strip()
+    return section
 
 
 def parse_new_format(content: str) -> list[dict]:
@@ -97,29 +144,25 @@ def parse_new_format(content: str) -> list[dict]:
     """
     questions = []
 
-    # ── Detect section header (first **bold** line that is NOT a Q.No) ────────
-    section = ''
-    for line in content.split('\n'):
-        m = re.match(r'^\s*\*\*([^*]+)\*\*\s*$', line.strip())
-        if m and 'Q.No' not in m.group(1):
-            section = m.group(1).strip()
-            break
-
-    # ── Split on Q.No markers, keeping the marker in each block ──────────────
-    raw_blocks = re.split(r'(?=\*\*Q\.No:\s*\d+\*\*)', content)
+    # FIX 1: Use the improved splitter that tolerates leading whitespace
+    raw_blocks = QNUM_SPLIT.split(content)
 
     for block in raw_blocks:
-        block = block.strip()
-        if not block:
+        block_stripped = block.strip()
+        if not block_stripped:
             continue
 
-        lines_raw = block.split('\n')
+        lines_raw = block_stripped.split('\n')
 
-        # Block must start with **Q.No: N**
-        qnum_match = re.match(r'\*\*Q\.No:\s*(\d+)\*\*', lines_raw[0].strip())
+        # Block must start with **Q.No: N** (possibly with leading spaces stripped)
+        qnum_match = QNUM_HEADER.match(lines_raw[0].strip())
         if not qnum_match:
             continue
         qnum = int(qnum_match.group(1))
+
+        # FIX 4: Determine section from the content BEFORE this block's position
+        block_pos = content.find(lines_raw[0].strip())
+        section = _get_section_before(content, max(block_pos, 0))
 
         # Clean all lines after the Q.No header line
         rest_lines = [clean_line(l) for l in lines_raw[1:]]
@@ -144,16 +187,17 @@ def parse_new_format(content: str) -> list[dict]:
         # ── Options: LAST paragraph always ───────────────────────────────────
         options_raw = paragraphs[-1]
 
-        # Strip uppercase A./B./C./D. prefix if present (grammar label questions)
-        uppercase_prefix = re.compile(r'^[A-E]\.\s+')
-        options: list[str] = [
-            re.sub(uppercase_prefix, '', opt).strip()
-            for opt in options_raw
-        ]
+        # FIX 3: Only strip A./B./C./D. prefix when the entire paragraph
+        # qualifies as an uppercase options block — prevents stripping text
+        # from question bodies that happen to start with a capital letter + dot.
+        if _is_options_paragraph(options_raw):
+            options = _strip_upper_prefix(options_raw)
+        else:
+            options = [opt.strip() for opt in options_raw]
 
         # ── Question text: ALL paragraphs before the last ────────────────────
         # For 2-paragraph questions  → paragraphs[0]   = question body
-        # For 3-paragraph questions  → paragraphs[0]   = passage + intro
+        # For 3-paragraph questions  → paragraphs[0]   = passage/intro
         #                              paragraphs[1]   = actual question line
         # Both cases: join everything before last paragraph into question text
         question_parts: list[str] = []
@@ -213,7 +257,6 @@ def to_bot_txt(questions: list[dict], start_number: int = 1) -> str:
         for j, key in enumerate(OPTION_KEYS):
             opt = q.get(f'option_{j+1}', '').strip()
             if opt:
-                # Replace <br> (Hindi sub-line) with newline+indent
                 opt_text = opt.replace('<br>', '\n    ')
                 lines.append(f"    {key}) {opt_text}")
 
@@ -254,12 +297,12 @@ def convert_file(input_path: str, output_path: str = None) -> None:
 
 # ── Integration with app.py upload route ─────────────────────────────────────
 # Add this import at the top of app.py:
-#   from convert_new_format import parse_new_format as parse_new_format_file
+#   from convert_new_format import parse_new_format
 #
 # Then in the /upload route, detect format and call the right parser:
 #
 #   content = file.read().decode('utf-8', errors='ignore')
-#   if '**Q.No:' in content:
+#   if '**Q.No:' in content or '**Q. No:' in content:
 #       questions = parse_new_format(content)
 #   else:
 #       questions = parse_txt_file(content)
