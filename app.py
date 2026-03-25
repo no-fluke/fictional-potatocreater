@@ -12,24 +12,66 @@ app.config['MAX_CONTENT_LENGTH'] = 10 * 1024 * 1024  # 10MB
 app.config['TEMP_QUIZ_DATA'] = {}  # temporary storage
 
 # -------------------------------
-# TXT PARSER (from Telegram bot – supports multiple formats)
+# TXT PARSER (supports bilingual SSC-style format with English + Hindi)
 # -------------------------------
 def parse_txt_file(content):
-    """Parse various TXT file formats and extract questions"""
+    """
+    Parse TXT quiz files exported from SSC CGL exam papers.
+
+    Supported format per question block (separated by blank lines):
+        26. Question text (English)
+            Question text (Hindi)
+            a) Option A
+            फेंसिंग              ← optional Hindi sub-line per option
+            b) Option B
+            ...
+        Correct option:-c
+        ex: English explanation
+        Hindi explanation        ← optional Hindi line after ex:
+
+    Key fixes vs original parser:
+      1. OPTION_PATTERN and STOP_QUESTION use lowercase-only (no re.IGNORECASE, no dot form)
+         → prevents 'A. The committee B. submitted...' in question body being
+           mistaken for an option (was breaking English grammar questions).
+      2. Header/metadata blocks ([file name]:, Date:, PART-B) are skipped explicitly.
+      3. Hindi explanation line after ex: is now captured in solution_text.
+    """
     questions = []
-    
-    # Split by double newlines (blank lines) – this is the fix
+
+    # Split on blank lines between question blocks
     blocks = re.split(r'\n\s*\n', content.strip())
-    
+
+    # ── Compiled patterns (defined once, reused per block) ─────────────────
+    # Matches 'a) text' or '(a) text' — lowercase ONLY, no dot form.
+    # Dot form 'a.' is intentionally excluded to avoid false matches on
+    # question body lines like 'A. The committee B. has submitted their report'.
+    OPTION_PATTERN = re.compile(r'^([a-e])\)\s*|^\(([a-e])\)\s*')
+
+    # Same pattern used to detect where question text ends and options begin.
+    STOP_QUESTION = re.compile(r'^[a-e]\)\s*|^\([a-e]\)\s*')
+
+    # Used to check whether the line AFTER an option start is a Hindi sub-line
+    # or the start of the next option/answer/explanation.
+    STOP_OPTION_LOOKAHEAD = re.compile(
+        r'^[a-e]\)|^\([a-e]\)|^Correct|^Answer:|^ex:', re.IGNORECASE
+    )
+
+    ANSWER_MAP = {'a': '1', 'b': '2', 'c': '3', 'd': '4', 'e': '5'}
+
     for block in blocks:
         block = block.strip()
         if not block:
             continue
-            
+
         lines = [line.strip() for line in block.split('\n') if line.strip()]
-        if len(lines) < 3:  # Minimum lines for a question
+        if len(lines) < 3:
             continue
-        
+
+        # Skip header/metadata blocks — they don't start with a question number
+        # Examples: '[file name]: ...', 'Date : ...', 'PART-B (General Intelligence)'
+        if not re.match(r'^\d+[\.\)]\s*|^Q[\.\s]*\d+', lines[0]):
+            continue
+
         question = {
             "question": "",
             "option_1": "", "option_2": "", "option_3": "", "option_4": "", "option_5": "",
@@ -41,91 +83,94 @@ def parse_txt_file(content):
             "solution_image": "",
             "correct_score": "3",
             "negative_score": "1",
-            "section": ""  # will be filled later
+            "section": ""  # filled by caller for full-mock mode
         }
-        
+
         current_line = 0
-        
-        # Detect format and parse accordingly
-        if re.match(r'^(?:\d+\.\s*|Q\.\d+\s+)', lines[0]):
-            # Format 1: "1. Question" or "Q.1 Question"
-            question_text = re.sub(r'^(?:\d+\.\s*|Q\.\d+\s+)', '', lines[0])
-            question_lines = [question_text]
-            current_line = 1
-            
-            # Check if next line is Hindi question (not starting with option pattern)
-            while (current_line < len(lines) and 
-                   not re.match(r'^[a-e]\)\s*|^\([a-e]\)\s*|^[a-e]\.\s*', lines[current_line], re.IGNORECASE)):
-                question_lines.append(lines[current_line])
-                current_line += 1
-        else:
-            # Format without question number
-            question_lines = []
-            while (current_line < len(lines) and 
-                   not re.match(r'^[a-e]\)\s*|^\([a-e]\)\s*|^[a-e]\.\s*', lines[current_line], re.IGNORECASE)):
-                question_lines.append(lines[current_line])
-                current_line += 1
-        
+
+        # ── Extract question text ─────────────────────────────────────────
+        # Strip leading question number (e.g. '26. ', 'Q.1 ', 'Q 1 ')
+        question_text = re.sub(r'^(?:\d+[\.\)]\s*|Q[\.\s]*\d+\s+)', '', lines[0])
+        question_lines = [question_text]
+        current_line = 1
+
+        # Absorb all continuation lines: bilingual Hindi line, multi-line statements,
+        # Conclusions blocks, etc. Stop only when we hit a lowercase option marker.
+        while current_line < len(lines) and not STOP_QUESTION.match(lines[current_line]):
+            question_lines.append(lines[current_line])
+            current_line += 1
+
         question["question"] = '<br>'.join(question_lines)
-        
-        # Extract options (up to 5)
+
+        # ── Extract options (up to 5) ─────────────────────────────────────
         option_count = 0
-        option_pattern = re.compile(r'^([a-e])[\)\.]\s*|^\(([a-e])\)\s*', re.IGNORECASE)
-        
-        while (current_line < len(lines) and option_count < 5 and
-               (option_pattern.match(lines[current_line]) or 
-                re.match(r'^Correct|^Answer:|^ex:', lines[current_line], re.IGNORECASE) is None)):
-            
-            if option_pattern.match(lines[current_line]):
+        while (current_line < len(lines)
+               and option_count < 5
+               and not re.match(r'^Correct|^Answer:|^ex:', lines[current_line], re.IGNORECASE)):
+
+            if OPTION_PATTERN.match(lines[current_line]):
                 option_key = f"option_{option_count + 1}"
                 option_text = lines[current_line]
                 current_line += 1
-                
-                # Add next line if it's Hindi text (doesn't start with option pattern, Correct, or ex:)
-                if (current_line < len(lines) and 
-                    not re.match(r'^[a-e]\)|^\([a-e]\)|^[a-e]\.|^Correct|^Answer:|^ex:', 
-                                lines[current_line], re.IGNORECASE)):
+
+                # If the very next line is a Hindi translation of this option
+                # (i.e. it does NOT start another option, answer, or explanation),
+                # append it to this option's text.
+                if (current_line < len(lines)
+                        and not STOP_OPTION_LOOKAHEAD.match(lines[current_line])):
                     option_text += f"<br>{lines[current_line]}"
                     current_line += 1
-                
+
                 question[option_key] = option_text
                 option_count += 1
             else:
+                # Unexpected non-option line between options — skip it
                 current_line += 1
-        
-        # Extract correct answer
+
+        # ── Extract correct answer ────────────────────────────────────────
         while current_line < len(lines):
             line = lines[current_line]
-            # Check for various answer formats
+
             if re.match(r'^Correct\s*(?:option)?\s*[:-]', line, re.IGNORECASE):
-                match = re.search(r'[:-]\s*([a-e])', line, re.IGNORECASE)
-                if match:
-                    ans = match.group(1).lower()
-                    answer_map = {'a': '1', 'b': '2', 'c': '3', 'd': '4', 'e': '5'}
-                    question["answer"] = answer_map.get(ans, '1')
-            elif re.match(r'^Answer\s*[:-]', line, re.IGNORECASE):
-                match = re.search(r'\(([a-e])\)', line, re.IGNORECASE)
-                if not match:
-                    match = re.search(r'[:-]\s*([a-e])', line, re.IGNORECASE)
-                if match:
-                    ans = match.group(1).lower()
-                    answer_map = {'a': '1', 'b': '2', 'c': '3', 'd': '4', 'e': '5'}
-                    question["answer"] = answer_map.get(ans, '1')
+                # Handles: 'Correct option:-c', 'Correct option: c', 'Correct:-c'
+                m = re.search(r'[:\-]\s*([a-e])', line, re.IGNORECASE)
+                if m:
+                    question["answer"] = ANSWER_MAP.get(m.group(1).lower(), '1')
+
+            elif re.match(r'^Answer\s*[:\-]', line, re.IGNORECASE):
+                # Handles: 'Answer: (c)', 'Answer:-c', 'Answer: c'
+                m = (re.search(r'\(([a-e])\)', line, re.IGNORECASE)
+                     or re.search(r'[:\-]\s*([a-e])', line, re.IGNORECASE))
+                if m:
+                    question["answer"] = ANSWER_MAP.get(m.group(1).lower(), '1')
+
             current_line += 1
-        
-        # Extract explanation
+
+        # ── Extract solution/explanation ──────────────────────────────────
         solution_lines = []
         for i in range(len(lines)):
-            if re.match(r'^ex:', lines[i], re.IGNORECASE):
-                solution_lines.append(re.sub(r'^ex:\s*', '', lines[i], flags=re.IGNORECASE))
-        
+            if re.match(r'^ex:\s*', lines[i], re.IGNORECASE):
+                # English explanation (same line as 'ex:')
+                solution_lines.append(
+                    re.sub(r'^ex:\s*', '', lines[i], flags=re.IGNORECASE)
+                )
+                # Hindi explanation (line immediately after 'ex:' line)
+                if (i + 1 < len(lines)
+                        and not re.match(
+                            r'^ex:|^Correct|^Answer:|^[a-e]\)',
+                            lines[i + 1],
+                            re.IGNORECASE
+                        )):
+                    solution_lines.append(lines[i + 1])
+
         question["solution_text"] = '<br>'.join(solution_lines)
-        
-        # Only add if we have question and at least one option
+
+        # Only add if we have a question and at least one option
         if question["question"] and (question["option_1"] or question["option_2"]):
             questions.append(question)
-    
+
     return questions
+
 
 # -------------------------------
 # IMAGE PROCESSOR
@@ -153,6 +198,7 @@ def process_image(file_storage, max_size=(700, 700), quality=60):
     except Exception as e:
         print("Image error:", e)
         return None
+
 
 # -------------------------------
 # ROUTES
