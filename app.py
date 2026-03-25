@@ -6,6 +6,7 @@ import uuid
 from io import BytesIO
 from PIL import Image
 from flask import Flask, render_template, request, jsonify, Response
+from convert_new_format import parse_new_format
 
 app = Flask(__name__)
 app.config['MAX_CONTENT_LENGTH'] = 10 * 1024 * 1024  # 10MB
@@ -173,6 +174,37 @@ def parse_txt_file(content):
 
 
 # -------------------------------
+# FORMAT AUTO-DETECTOR
+# -------------------------------
+def parse_quiz_file(content: str) -> list:
+    """
+    Auto-detect which format the uploaded TXT file uses and call
+    the correct parser. Returns a list of question dicts.
+
+    Format A — legacy SSC bot format (parse_txt_file):
+        26. Question text
+            Hindi question text
+            a) Option
+            ...
+        Correct option:-c
+        ex: Explanation
+
+    Format B — new markdown format (parse_new_format):
+        **PART-A (Section)**
+        **Q.No: 1**
+        Question text
+
+        Option 1
+        Option 2
+        ...
+    """
+    if '**Q.No:' in content:
+        return parse_new_format(content)
+    else:
+        return parse_txt_file(content)
+
+
+# -------------------------------
 # IMAGE PROCESSOR
 # -------------------------------
 def process_image(file_storage, max_size=(700, 700), quality=60):
@@ -219,7 +251,7 @@ def upload():
                 return jsonify({'error': 'Invalid file'}), 400
 
             content = file.read().decode('utf-8', errors='ignore')
-            questions = parse_txt_file(content)
+            questions = parse_quiz_file(content)
 
             if not questions:
                 return jsonify({'error': 'No questions parsed'}), 400
@@ -247,7 +279,7 @@ def upload():
                         return jsonify({'error': 'Section missing'}), 400
 
                     content = file.read().decode('utf-8', errors='ignore')
-                    qs = parse_txt_file(content)
+                    qs = parse_quiz_file(content)
 
                     for q in qs:
                         q["section"] = section_name
